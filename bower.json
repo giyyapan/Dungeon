@@ -1,0 +1,9 @@
+{
+  "name": "dungeon-client",
+  "dependencies": {
+    "jquery": "~2.1.3"
+  },
+  "install": {
+    "path": "client/libs"
+  }
+}
