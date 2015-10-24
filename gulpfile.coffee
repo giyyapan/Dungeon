@@ -5,14 +5,24 @@ watch = require('gulp-watch')
 path = require('path')
 
 gulp.task 'less', ->
-  return gulp.src('client/*.less')
-    .pipe(less())
-    .pipe(gulp.dest('client/'))
+  l = less()
+  l.on "error",(e)->
+    console.error "[Error] compiling less:"
+    console.error e.stack
+    l.end()
+  return gulp.src 'client/*.less'
+    .pipe l
+    .pipe gulp.dest('client/')
 
 gulp.task 'coffee',->
-  return gulp.src("client/*.coffee")
-    .pipe(coffee())
-    .pipe(gulp.dest("client/"))
+  c = coffee()
+  c.on "error",(e)->
+    console.error "[Error] compiling coffee:"
+    console.error e.stack
+    c.end()
+  return gulp.src "client/*.coffee"
+    .pipe c
+    .pipe gulp.dest("client/")
 
 gulp.task 'watch', ->
   gulp.watch 'client/*.less', ['less']
