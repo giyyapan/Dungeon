@@ -3,6 +3,8 @@ less = require('gulp-less')
 coffee = require('gulp-coffee')
 watch = require('gulp-watch')
 path = require('path')
+browserify = require('gulp-browserify')
+rename = require('gulp-rename')
 
 gulp.task 'less', ->
   l = less()
@@ -20,8 +22,12 @@ gulp.task 'coffee',->
     console.error "[Error] compiling coffee:"
     console.error e.stack
     c.end()
-  return gulp.src "client/*.coffee"
-    .pipe c
+  return gulp.src "client/main.coffee",{read:false}
+    .pipe(browserify({
+      transform: ['coffeeify'],
+      extensions: ['.coffee']
+    }))
+    .pipe rename 'script.js'
     .pipe gulp.dest("client/")
 
 gulp.task 'watch', ->
