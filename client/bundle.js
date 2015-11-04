@@ -1,66 +1,69 @@
 /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
-
+/******/
 /******/ 	// The require function
 /******/ 	function __webpack_require__(moduleId) {
-
+/******/
 /******/ 		// Check if module is in cache
 /******/ 		if(installedModules[moduleId])
 /******/ 			return installedModules[moduleId].exports;
-
+/******/
 /******/ 		// Create a new module (and put it into the cache)
 /******/ 		var module = installedModules[moduleId] = {
 /******/ 			exports: {},
 /******/ 			id: moduleId,
 /******/ 			loaded: false
 /******/ 		};
-
+/******/
 /******/ 		// Execute the module function
 /******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
-
+/******/
 /******/ 		// Flag the module as loaded
 /******/ 		module.loaded = true;
-
+/******/
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
 /******/ 	}
-
-
+/******/
+/******/
 /******/ 	// expose the modules object (__webpack_modules__)
 /******/ 	__webpack_require__.m = modules;
-
+/******/
 /******/ 	// expose the module cache
 /******/ 	__webpack_require__.c = installedModules;
-
+/******/
 /******/ 	// __webpack_public_path__
 /******/ 	__webpack_require__.p = "";
-
+/******/
 /******/ 	// Load entry module and return exports
 /******/ 	return __webpack_require__(0);
 /******/ })
 /************************************************************************/
 /******/ ([
 /* 0 */
+/*!********************************!*\
+  !*** ./client/src/client.cjsx ***!
+  \********************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	var DungeonClient, FileUploader, MainContainer, TestComponent,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
-
-	__webpack_require__(1);
-
-	FileUploader = __webpack_require__(5);
-
-	TestComponent = __webpack_require__(6);
-
+	
+	__webpack_require__(/*! ./styles/global.less */ 1);
+	
+	FileUploader = __webpack_require__(/*! ./FileUploader */ 5);
+	
+	TestComponent = __webpack_require__(/*! ./TestComponent */ 6);
+	
 	MainContainer = (function(superClass) {
 	  extend(MainContainer, superClass);
-
+	
 	  function MainContainer() {
 	    console.log("run container constructor");
 	  }
-
+	
 	  MainContainer.prototype.render = function() {
 	    return React.createElement("div", null, React.createElement(TestComponent, {
 	      "text": "111",
@@ -70,11 +73,11 @@
 	      }
 	    }));
 	  };
-
+	
 	  return MainContainer;
-
+	
 	})(React.Component);
-
+	
 	DungeonClient = (function() {
 	  function DungeonClient() {
 	    this.fileUploader = new FileUploader;
@@ -103,7 +106,7 @@
 	    this.listFiles();
 	    ReactDOM.render(React.createElement(MainContainer, null), $("#main-container")[0]);
 	  }
-
+	
 	  DungeonClient.prototype.listFiles = function(dir) {
 	    if (dir == null) {
 	      dir = "";
@@ -114,7 +117,7 @@
 	      return console.log("error", e);
 	    });
 	  };
-
+	
 	  DungeonClient.prototype.handleUploadFiles = function(files) {
 	    var f, i, len, p, totalSize;
 	    totalSize = 0;
@@ -138,7 +141,7 @@
 	      return console.error("upload error");
 	    });
 	  };
-
+	
 	  DungeonClient.prototype.uploadFile = function(file) {
 	    return new Promise(function(resolve, reject) {
 	      var uploader;
@@ -150,16 +153,19 @@
 	      return uploader.upload(file);
 	    });
 	  };
-
+	
 	  return DungeonClient;
-
+	
 	})();
-
+	
 	new DungeonClient();
 
 
 /***/ },
 /* 1 */
+/*!***************************************!*\
+  !*** ./client/src/styles/global.less ***!
+  \***************************************/
 /***/ function(module, exports) {
 
 	// removed by extract-text-webpack-plugin
@@ -169,22 +175,25 @@
 /* 3 */,
 /* 4 */,
 /* 5 */
+/*!****************************************!*\
+  !*** ./client/src/FileUploader.coffee ***!
+  \****************************************/
 /***/ function(module, exports) {
 
 	var EventEmitter, FileUploader, size,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
-
+	
 	EventEmitter = Suzaku.EventEmitter;
-
+	
 	size = {
 	  kb: 1024,
 	  mb: 1024 * 1024
 	};
-
+	
 	module.exports = FileUploader = (function(superClass) {
 	  extend(FileUploader, superClass);
-
+	
 	  function FileUploader() {
 	    this.uploadApi = "/upload";
 	    this.checkApi = "/check";
@@ -196,15 +205,15 @@
 	    this.apiPath = null;
 	    this.currentSlice = 0;
 	  }
-
+	
 	  FileUploader.prototype.setUploadApi = function(uploadApi) {
 	    this.uploadApi = uploadApi;
 	  };
-
+	
 	  FileUploader.prototype.setCheckApi = function(checkApi) {
 	    this.checkApi = checkApi;
 	  };
-
+	
 	  FileUploader.prototype.upload = function(file) {
 	    var xhr;
 	    this.file = file;
@@ -223,7 +232,7 @@
 	      };
 	    })(this);
 	  };
-
+	
 	  FileUploader.prototype.doUpload = function() {
 	    this.sliceCount = Math.ceil(this.file.size / this.sliceSize);
 	    this.availThreads = this.maxThreads;
@@ -248,7 +257,7 @@
 	    })(this));
 	    return this.uploadNextSlice();
 	  };
-
+	
 	  FileUploader.prototype.uploadNextSlice = function() {
 	    if (!(this.availThreads > 0)) {
 	      return;
@@ -258,7 +267,7 @@
 	    this.currentSlice += 1;
 	    return this.uploadNextSlice();
 	  };
-
+	
 	  FileUploader.prototype.uploadSlice = function(slice) {
 	    var bolb, name, reader, start, stop, url, xhr;
 	    if (!(slice < this.sliceCount)) {
@@ -305,7 +314,7 @@
 	    url = this.uploadApi + ("?start=" + start + "&stop=" + stop + "&filename=" + name);
 	    return xhr.open("POST", url);
 	  };
-
+	
 	  FileUploader.prototype.sendAsBinary = function(xhr, data) {
 	    var i, j, parts, ref;
 	    this.xhr = new XMLHttpRequest();
@@ -315,7 +324,7 @@
 	    }
 	    return xhr.send(parts.buffer);
 	  };
-
+	
 	  FileUploader.prototype.showResult = function(res, label) {
 	    var aByte, byteStr, j, markup, n, ref;
 	    markup = [];
@@ -329,31 +338,34 @@
 	    }
 	    return console.log(markup.join(" "));
 	  };
-
+	
 	  return FileUploader;
-
+	
 	})(EventEmitter);
 
 
 /***/ },
 /* 6 */
+/*!***************************************!*\
+  !*** ./client/src/TestComponent.cjsx ***!
+  \***************************************/
 /***/ function(module, exports, __webpack_require__) {
 
 	var TestComponent,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
-
-	__webpack_require__(7);
-
+	
+	__webpack_require__(/*! ./styles/testComponent.less */ 7);
+	
 	module.exports = TestComponent = (function(superClass) {
 	  extend(TestComponent, superClass);
-
+	
 	  function TestComponent() {
 	    this.state = {
 	      text: "!!!!"
 	    };
 	  }
-
+	
 	  TestComponent.prototype.render = function() {
 	    var n;
 	    return React.createElement("div", {
@@ -369,17 +381,21 @@
 	      return results;
 	    })());
 	  };
-
+	
 	  return TestComponent;
-
+	
 	})(React.Component);
 
 
 /***/ },
 /* 7 */
+/*!**********************************************!*\
+  !*** ./client/src/styles/testComponent.less ***!
+  \**********************************************/
 /***/ function(module, exports) {
 
 	// removed by extract-text-webpack-plugin
 
 /***/ }
 /******/ ]);
+//# sourceMappingURL=bundle.js.map

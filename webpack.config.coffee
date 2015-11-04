@@ -1,6 +1,8 @@
 ExtractTextPlugin = require("extract-text-webpack-plugin")
 
 module.exports =
+  devtool: 'source-map'
+
   entry:'./client/src/client.cjsx' #main client script
 
   output:
@@ -16,7 +18,7 @@ module.exports =
     loaders: [
       { test: /\.cjsx$/, loaders: ['coffee', 'cjsx']}
       { test: /\.coffee$/, loader: 'coffee' }
-      { test: /\.less$/, loader: ExtractTextPlugin.extract("style-loader", "css-loader!less-loader") }
+      { test: /\.less$/, loader: ExtractTextPlugin.extract("style-loader", "css-loader?sourceMap!less-loader") }
     ]
 
   plugins: [
