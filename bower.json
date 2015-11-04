@@ -2,7 +2,8 @@
   "name": "dungeon-client",
   "dependencies": {
     "jquery": "~2.1.3",
-    "suzaku": "~0.1.1"
+    "suzaku": "~0.1.1",
+    "react": "~0.14.2"
   },
   "install": {
     "path": "client/libs"

@@ -1,40 +1,35 @@
 express = require 'express'
 cson = require 'cson'
-fs = require 'fs'
 
-class DungeonTreasure
+UploadHandler = require './handlers/UploadHandler.coffee'
+FileViewHandler = require './handlers/FileViewHandler.coffee'
+
+class Dungeon
   constructor:()->
     @configs = cson.load '../configs.cson'
     @dataPath = @configs.dataPath
-    console.log @configs
+    @uploadHandler = new UploadHandler this
+    @fileViewHandler = new FileViewHandler this
+    @initServer()
 
+  initServer:->
     @server = express()
 
     @server.post "/upload",(req, res, next)=>
-      stream = fs.createWriteStream "/home/giyya/Storage/#{Date.now()}.jpg"
-      totalSize = 0
-      chunks = []
-      req.on "data",(chunk)->
-        totalSize += chunk.length
-        chunks.push chunk
-      req.on "end",->
-        console.log "upload complete"
-        console.log totalSize
-        body = new Buffer(totalSize)
-        index = 0
-        for c in chunks
-          c.copy body,index
-          index += c.length
-        stream.write new Buffer body.toString(),"base64"
-        res.end()
-      stream.on "error",(e)->
-        console.log e.stack
-        res.status(500).end()
+      @uploadHandler.uploadFileSlice req,res
 
+    @server.get "/check",(req, res, next)=>
+      @uploadHandler.preCheck req,res
+
+    @server.get "/list",(req, res, next)=>
+      @fileViewHandler.list req,res
+
+    @server.get "/list/:path",(req, res, next)=>
+      @fileViewHandler.list req,res
 
     @server.use express.static("../client")
 
     @server.listen @configs.port,=>
       console.log "Server started at #{@configs.port}"
 
-new DungeonTreasure()
+new Dungeon()

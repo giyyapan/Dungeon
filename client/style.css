@@ -17,3 +17,6 @@ body {
   height: 80%;
   background: rgba(0, 0, 0, 0.1);
 }
+.test-component {
+  color: #b41e1e;
+}
