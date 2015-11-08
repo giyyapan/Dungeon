@@ -1,2 +1,3 @@
 port:'8010'
 dataPath:'/home/giyya/Storage'
+thumbnailPath:'/home/giyya/Storage/.thumbnails'

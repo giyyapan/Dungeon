@@ -5,11 +5,9 @@ size =
   mb:1024 * 1024
 
 module.exports =
-  class FileUploader extends EventEmitter
+  class Uploader extends EventEmitter
     constructor:()->
-      @uploadApi = "/upload"
-      @checkApi = "/check"
-
+      super
       @sliceSize = 3 * size.mb
       #maxThreads = 3
       @maxThreads = 2
@@ -18,14 +16,12 @@ module.exports =
       @sliceCount = 0
       @apiPath = null
       @currentSlice = 0
+      @currentDir = "/"
 
-    setUploadApi:(@uploadApi)->
-    setCheckApi:(@checkApi)->
-
-    upload:(@file)->
+    upload:(@currentDir,@file)->
       #check
       xhr = new XMLHttpRequest()
-      xhr.open "GET","#{@checkApi}?filename=#{@file.name}&size=#{@file.size}"
+      xhr.open "GET","/check#{@currentDir}?filename=#{@file.name}&size=#{@file.size}"
       xhr.send()
       xhr.onload = ()=>
         @doUpload()
@@ -63,7 +59,7 @@ module.exports =
       @uploadNextSlice()
 
     uploadNextSlice:()->
-      return unless @availThreads > 0
+      return unless @currentSlice < @sliceCount and @availThreads > 0
       @availThreads -= 1
       @uploadSlice @currentSlice
       @currentSlice += 1
@@ -97,7 +93,7 @@ module.exports =
         @emit "sliceComplete",slice
       xhr.upload.onerror = (error)=>
         @emit "error",error
-      url = @uploadApi + "?start=#{start}&stop=#{stop}&filename=#{name}"
+      url = "/upload#{@currentDir}?start=#{start}&stop=#{stop}&filename=#{name}"
       xhr.open "POST",url
 
     sendAsBinary:(xhr, data)->

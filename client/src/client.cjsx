@@ -1,20 +1,30 @@
 require './styles/global.less'
 
-FileUploader = require './FileUploader'
-TestComponent = require './TestComponent'
+#components
+FilesPanel = require './components/FilesPanel'
+#modules
+FileUploadManager = require './FileUploadManager'
 
-class MainContainer extends React.Component
-  constructor:()->
-    console.log "run container constructor"
-  render:->
-    <div >
-      <TestComponent text={"111"} text2="222" obj={{key:"val"}}/>
-    </div>
+#关于components方法的命名
+#
+# - 用于交付给子组件触发的 props.interface 采用 on 开头的命名
+#   如： <ChildItem onEvent={xxx}>
+#
+# - 用于处理 props.interface 的方法采用 handle 开头的命名
+#   如： <ChildItem onEvent={@handleItemEvent}>
+#   如果可以直接调用已经存在的, 则允许直接调用公开方法
+#   如： <RefreshBtn onClick={@refresh}>
+#
+# - 其他自定义public方法命名随意, 但是不可以和上面两条冲突
+#
+# - 其他自定义private方法 (除了上三条之外的private方法) 以下划线开头
 
-class DungeonClient
+
+class DungeonClient extends Suzaku.EventEmitter
   constructor:()->
-    @fileUploader = new FileUploader
-    console.log "inited"
+    super
+    @uploadManager = new FileUploadManager this
+
     window.addEventListener "dragover",(e)=>
       console.log "over"
       e.preventDefault()
@@ -24,37 +34,22 @@ class DungeonClient
     window.addEventListener "drop",(e)=>
       e.stopPropagation()
       e.preventDefault()
-      files = e.dataTransfer.files
-      @handleUploadFiles files
-    @listFiles()
-    ReactDOM.render <MainContainer />,$("#main-container")[0]
+      currentDir = @filesPanel.state.currentDir
+      dt = e.dataTransfer
+      if dt.files.length > 0
+        @uploadManager.handleDragFiles currentDir,dt.files
+        @emit "uploading"
+      else if dt.getData('text/html')
+        @uploadManager.handleDragHtml currentDir,dt.getData('text/html')
+        @emit "uploading"
+      else
+        console.log "drop event unhandled"
 
-  listFiles:(dir = "")->
-    $.get "/list/#{dir}",(data)->
-      console.log "got list data",data
-    .fail (e)->
-      console.log "error",e
+    @uploadManager.on "fileUploaded",=>
+      @filesPanel.listDir()
 
-  handleUploadFiles:(files)->
-    totalSize = 0
-    totalSize += f.size for f in files
-    console.log "total file size is #{totalSize/1024/1024}MB"
-    p = Promise.resolve()
-    Array::forEach.call files,(f)=>
-      p = p.then =>
-        @uploadFile(f)
-    p.then (e)->
-      console.log "finished"
-    .catch (e)->
-      console.error e.stack
-      console.error "upload error"
+    @filesPanel = ReactDOM.render <FilesPanel client={this}/>,$("#main-container")[0]
 
-  uploadFile:(file)->
-    new Promise (resolve, reject)->
-      console.log "start upload #{file.name}"
-      uploader = new FileUploader()
-      uploader.on "complete",->
-        resolve()
-      uploader.upload(file)
+    console.log "inited Dungeon client"
 
 new DungeonClient()

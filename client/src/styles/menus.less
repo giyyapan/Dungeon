@@ -1,0 +1,23 @@
+.menu-wrapper{
+  //background: rgba(0, 0, 0, 0.1);
+}
+@border-color:#ddd;
+.menu{
+  background: #fafafa;
+  min-width: 150px;
+  border: 1px solid @border-color;
+  position: absolute;
+  li{
+    padding: 6px 10px;
+    text-align: left;
+    font-size: 14px;
+    border-bottom: 1px solid @border-color;
+    cursor: pointer;
+    &:last-child{
+      border-bottom: none;
+    }
+    &:hover{
+      background: #f0f0f0;
+    }
+  }
+}
