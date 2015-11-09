@@ -3,6 +3,8 @@ fs = require 'fs'
 path = require 'path'
 rimraf = require 'rimraf'
 
+utils = require '../utils'
+
 module.exports =
   class FilesHandler extends EventEmitter
     constructor:({configs})->
@@ -46,20 +48,26 @@ module.exports =
       #get /remvoe/*
       relativePath = req.params[0]
       realPath = path.normalize "#{@dataPath}/#{relativePath}"
-      fs.stat realPath,(e,stats)=>
-        if e then return @_handleError e,res
-        if stats.isDirectory()
-          rimraf realPath,(e)=>
-            if e then return @_handleError e,res
-            res.send('ok')
-        else
-          fs.unlink realPath,(e)=>
-            if e then return @_handleError e,res
-            res.send('ok')
-
-    _handleError:(e,res)->
-      console.error e
-      res.status(500).end()
+      new Promise (resolve, reject)->
+        fs.stat realPath,(e,stats)->
+          if e then return reject e
+          if stats.isDirectory()
+            rimraf realPath,(e)->
+              if e then return reject e
+              resolve()
+          else
+            fs.unlink realPath,(e)->
+              if e then return reject e
+              resolve()
+      .then ()=>
+        hash = utils.getFilePathHash(relativePath)
+        _path = path.normalize "#{@thumbnailPath}/#{hash}.jpg"
+        fs.unlink _path,(e)->
+          if e and e.code isnt "ENOENT" then console.error(e)
+          res.send "ok"
+      .catch (e)->
+        console.error e
+        res.status(500).end()
 
     _getFileStats:(filepath)->
       new Promise (resolve, reject)->

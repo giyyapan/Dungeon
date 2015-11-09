@@ -2,7 +2,8 @@
 path = require 'path'
 fs = require 'fs'
 lwip = require 'lwip'
-crypto = require 'crypto'
+
+utils = require '../utils'
 
 module.exports =
   class PreviewHandler extends EventEmitter
@@ -21,9 +22,7 @@ module.exports =
     previewImg:(req, res, next)->
       return next() unless @enabled
       filePath = req.params[0]
-      md5 = crypto.createHash "md5"
-      md5.update(filePath)
-      hash = md5.digest('hex')
+      hash = utils.getFilePathHash filePath
       realPath = path.normalize("#{@thumbnailPath}/#{hash}.jpg")
       fs.stat realPath,(e,stats)=>
         if not e
