@@ -36,6 +36,10 @@ class Dungeon
 
     @server.get "/viewImage/*",@filesHandler.viewImage.bind(@filesHandler)
 
+    @server.get "/newFolder/*",@filesHandler.newFolder.bind(@filesHandler)
+
+    @server.get "/rename/*",@filesHandler.rename.bind(@filesHandler)
+
     @server.get "/get/*",(req, res, next)->
       console.log "get",req.params[0]
 

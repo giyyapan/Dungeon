@@ -1,5 +1,6 @@
 require '../styles/filesPanel.less'
 FileItem = require './FileItem'
+FileNameItem = require './FileNameItem'
 
 module.exports =
   class ImageItem extends FileItem
@@ -12,6 +13,8 @@ module.exports =
         <div className="icon">
           <img src={src} className="preview"/>
         </div>
-        <p className="name" tilte={@props.data.name}>{@props.data.name}</p>
 
+        <FileNameItem ref="fileName"
+          name={@props.data.name}
+          onChange={@handleRename.bind(@)} />
       </div>

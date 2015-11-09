@@ -69,6 +69,52 @@ module.exports =
         console.error e
         res.status(500).end()
 
+    newFolder:(req, res, next)->
+      relativePath = req.params[0]
+      names = relativePath.split "/"
+      console.log names
+      p = Promise.resolve()
+      realPath = @dataPath
+      for name in names
+        realPath = path.normalize "#{realPath}/#{name}"
+        do (realPath = realPath)=>
+          p = p.then =>
+            @_createFolder realPath
+      p.then (result)->
+        res.send result
+      p.catch (e)->
+        console.error(e)
+        res.status(500).end()
+
+    _createFolder:(realPath)->
+      #console.log "create:",realPath
+      new Promise (resolve,reject)->
+        fs.mkdir realPath,(e)->
+          if e
+            if e.code is "EEXIST"
+              resolve "exists"
+            else
+              reject e
+          else
+            resolve "ok"
+
+    rename:(req, res, next)->
+      relativePath = req.params[0]
+      to = req.query.to
+      if not to then return res.status(400).end("need argument 'to'")
+      realPath = path.normalize "#{@dataPath}/#{relativePath}"
+      parts = "/#{relativePath}".split("/")
+      parts.pop()
+      parts.push(to)
+      newRealPath = path.normalize "#{@dataPath}/#{parts.join("/")}"
+      console.log "new real path:",newRealPath
+      fs.rename realPath,newRealPath,(e)->
+        if e
+          console.error e
+          res.status(500).end()
+        else
+          res.send "ok"
+
     _getFileStats:(filepath)->
       new Promise (resolve, reject)->
         fs.stat filepath,(e, stats)->

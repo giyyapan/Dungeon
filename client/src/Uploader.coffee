@@ -23,11 +23,13 @@ module.exports =
       xhr = new XMLHttpRequest()
       xhr.open "GET","/check#{@currentDir}?filename=#{@file.name}&size=#{@file.size}"
       xhr.send()
-      xhr.onload = ()=>
-        @doUpload()
-      xhr.onerror = (e)=>
-        console.error e
-        @emit "error",e
+      xhr.onreadystatechange = (evt)=>
+        if xhr.readyState is 4
+          if xhr.status is 200
+            @doUpload()
+          else
+            console.error "preCheck error for file:",@file
+            @emit "error",xhr.responseText
 
     doUpload:->
       # r = new FileReader()
@@ -36,7 +38,10 @@ module.exports =
       #   console.log r.result
       #   @showResult r.result
       #   r = null
-      @sliceCount = Math.ceil(@file.size/@sliceSize)
+      if @file.size > 0
+        @sliceCount = Math.ceil(@file.size/@sliceSize)
+      else
+        @sliceCount = 1
       @availThreads = @maxThreads
       console.log "sliceCount is #{@sliceCount}"
       @currentSlice = 0
@@ -68,10 +73,13 @@ module.exports =
     uploadSlice:(slice)->
       return unless slice < @sliceCount
       name = @file.name
-      start = slice * @sliceSize
-      stop = (slice + 1) * @sliceSize - 1
+      if @file.size > 0
+        start = slice * @sliceSize
+        stop = (slice + 1) * @sliceSize - 1
+        if stop > (@file.size - 1) then stop = @file.size - 1
+      else
+        start = stop = 0
       #console.log "upload slice",slice,start,"~",stop,"availThreads #{@availThreads}"
-      if stop > (@file.size - 1) then stop = @file.size - 1
       bolb = @file.slice start,stop + 1
 
       reader = new FileReader()
@@ -89,19 +97,25 @@ module.exports =
         if evt.lengthComputable
           percentage = Math.round((evt.loaded * 100) / evt.total);
           @emit "sliceProgress",slice,percentage
-      xhr.upload.onload = (e)=>
-        @emit "sliceComplete",slice
-      xhr.upload.onerror = (error)=>
-        @emit "error",error
+      xhr.onreadystatechange = (evt)=>
+        if xhr.readyState is 4
+          if xhr.status is 200
+            @emit "sliceComplete",slice
+          else
+            @emit "error",xhr.responseText
       url = "/upload#{@currentDir}?start=#{start}&stop=#{stop}&filename=#{name}"
       xhr.open "POST",url
 
     sendAsBinary:(xhr, data)->
       @xhr = new XMLHttpRequest()
       parts = new Uint8Array(data.length)
-      for i in [0..data.length-1]
-        parts[i] = data[i].charCodeAt(0)
-      xhr.send(parts.buffer)
+      if data.length > 0
+        parts = new Uint8Array(data.length)
+        for i in [0..data.length-1]
+          parts[i] = data[i].charCodeAt(0)
+        xhr.send(parts.buffer)
+      else
+        xhr.send('')
 
     showResult:(res, label)->
       markup = []

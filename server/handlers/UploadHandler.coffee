@@ -46,15 +46,20 @@ module.exports =
       #get /check
       {filename,size,checksum} = req.query
       dir = req.params[0] or "/"
+      realDir = path.normalize "#{@dataPath}/#{dir}"
       relativePath = path.normalize "/#{dir}/#{filename}"
       realPath = path.normalize "#{@dataPath}#{relativePath}"
-      fs.open realPath ,"w",(e,fileDescriptor)=>
-        if e
+      fs.mkdir realDir,(e)=>
+        if e and e.code isnt "EEXIST"
           console.error e
           return res.status(500).end()
-        @_addUploadingFile relativePath,size,checksum,fileDescriptor
-        console.log "preCheck success, waiting for file upload ..."
-        res.end()
+        fs.open realPath ,"w",(e,fileDescriptor)=>
+          if e
+            console.error e
+            return res.status(500).end()
+          @_addUploadingFile relativePath,size,checksum,fileDescriptor
+          console.log "preCheck success, waiting for file upload ..."
+          res.end()
 
     uploadFileSlice:(req, res)->
       #post /upload

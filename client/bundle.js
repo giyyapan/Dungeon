@@ -64,29 +64,30 @@
 	    DungeonClient.__super__.constructor.apply(this, arguments);
 	    this.uploadManager = new FileUploadManager(this);
 	    window.addEventListener("dragover", (function(_this) {
-	      return function(e) {
+	      return function(evt) {
 	        console.log("over");
-	        return e.preventDefault();
+	        return evt.preventDefault();
 	      };
 	    })(this));
 	    window.addEventListener("dragleave", (function(_this) {
-	      return function(e) {
+	      return function(evt) {
 	        console.log("leave");
-	        return e.preventDefault();
+	        return evt.preventDefault();
 	      };
 	    })(this));
 	    window.addEventListener("drop", (function(_this) {
-	      return function(e) {
+	      return function(evt) {
 	        var currentDir, dt;
-	        e.stopPropagation();
-	        e.preventDefault();
+	        evt.stopPropagation();
+	        evt.preventDefault();
 	        currentDir = _this.filesPanel.state.currentDir;
-	        dt = e.dataTransfer;
-	        if (dt.files.length > 0) {
-	          _this.uploadManager.handleDragFiles(currentDir, dt.files);
-	          return _this.emit("uploading");
-	        } else if (dt.getData('text/html')) {
+	        dt = evt.dataTransfer;
+	        console.log(dt.items);
+	        if (dt.getData('text/html')) {
 	          _this.uploadManager.handleDragHtml(currentDir, dt.getData('text/html'));
+	          return _this.emit("uploading");
+	        } else if (dt.items.length > 0) {
+	          _this.uploadManager.handleDragFiles(currentDir, dt.items);
 	          return _this.emit("uploading");
 	        } else {
 	          return console.log("drop event unhandled");
@@ -96,6 +97,11 @@
 	    this.uploadManager.on("fileUploaded", (function(_this) {
 	      return function() {
 	        return _this.filesPanel.listDir();
+	      };
+	    })(this));
+	    this.uploadManager.on("uploadError", (function(_this) {
+	      return function(e) {
+	        return _this.filesPanel.showMessage("uploadError");
 	      };
 	    })(this));
 	    this.filesPanel = ReactDOM.render(React.createElement(FilesPanel, {
@@ -253,17 +259,64 @@
 	    return this.listDir();
 	  };
 	
-	  FilesPanel.prototype.showDetail = function(arg) {
+	  FilesPanel.prototype.showMessage = function(msg) {
+	    return this.setState({
+	      message: msg
+	    });
+	  };
+	
+	  FilesPanel.prototype._showItemDetail = function(arg) {
 	    var itemData, itemType;
 	    itemType = arg.itemType, itemData = arg.itemData;
 	    return this.refs.detailPanel.showDetail(itemType, itemData);
 	  };
 	
-	  FilesPanel.prototype.onMenuItemClick = function(arg) {
+	  FilesPanel.prototype.createNewFolder = function() {
+	    var name;
+	    name = window.prompt("请输入名称：");
+	    if (name.indexOf("/") > -1) {
+	      return alert("文件名不能含有'/'");
+	    }
+	    if (!name) {
+	      return;
+	    }
+	    return $.get("/newFolder" + this.state.currentDir + "/" + name).done((function(_this) {
+	      return function(res) {
+	        return _this.listDir();
+	      };
+	    })(this)).fail(function(e) {
+	      return console.error(e);
+	    });
+	  };
+	
+	  FilesPanel.prototype.handleMenuItemClick = function(arg) {
 	    var action, itemData, key;
 	    key = arg.key, itemData = arg.itemData;
 	    action = key;
-	    return this.refs[itemData.relativePath].doFileAction(action);
+	    if (itemData) {
+	      return this.refs[itemData.relativePath].doFileAction(action);
+	    } else {
+	      switch (action) {
+	        case 'newFolder':
+	          return this.createNewFolder();
+	        case 'refresh':
+	          return this.refresh();
+	      }
+	    }
+	  };
+	
+	  FilesPanel.prototype.handleContextMenu = function(evt) {
+	    console.log("contextMenu");
+	    evt.stopPropagation();
+	    evt.preventDefault();
+	    return this.refs.contextMenu.show({
+	      menuItems: ['newFolder', 'refresh'],
+	      itemData: null,
+	      position: {
+	        x: evt.pageX,
+	        y: evt.pageY - window.scrollY
+	      }
+	    });
 	  };
 	
 	  FilesPanel.prototype.handleItemEvent = function(event, data) {
@@ -274,7 +327,7 @@
 	      case 'enterDir':
 	        return this.changeDir(data);
 	      case 'showDetail':
-	        return this.showDetail(data);
+	        return this._showItemDetail(data);
 	      case 'showContextMenu':
 	        return this.refs.contextMenu.show(data);
 	      case 'update':
@@ -309,7 +362,7 @@
 	      "ref": "detailPanel"
 	    }), React.createElement(ContextMenu, {
 	      "ref": "contextMenu",
-	      "onItemClick": this.onMenuItemClick.bind(this)
+	      "onItemClick": this.handleMenuItemClick.bind(this)
 	    }), React.createElement("header", {
 	      "className": "main-header"
 	    }, React.createElement("button", {
@@ -319,8 +372,9 @@
 	    }, "后退"), React.createElement("span", {
 	      "className": "current-path"
 	    }, this.state.currentDir)), React.createElement("div", {
-	      "className": "files-holder"
-	    }, (this.state.message ? React.createElement("span", {
+	      "className": "files-holder",
+	      "onContextMenu": this.handleContextMenu.bind(this)
+	    }, (this.state.message ? React.createElement("p", {
 	      "className": "message-holder"
 	    }, ((function() {
 	      switch (this.state.message) {
@@ -332,6 +386,10 @@
 	          return "没有文件";
 	        case "uploading":
 	          return "上传中...";
+	        case "uploadError":
+	          return React.createElement("span", {
+	            "className": "error"
+	          }, "上传错误！");
 	      }
 	    }).call(this))) : void 0), ((function() {
 	      var i, len, ref, results;
@@ -367,7 +425,9 @@
 	        }
 	      }
 	      return results;
-	    }).call(this))));
+	    }).call(this)), React.createElement("div", {
+	      "className": "clearfix"
+	    })));
 	  };
 	
 	  return FilesPanel;
@@ -392,13 +452,15 @@
   \********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	var DirItem, FileItem,
+	var DirItem, FileItem, FileNameItem,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
 	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
 	
 	FileItem = __webpack_require__(/*! ./FileItem */ 9);
+	
+	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 25);
 	
 	module.exports = DirItem = (function(superClass) {
 	  extend(DirItem, superClass);
@@ -422,10 +484,11 @@
 	      "className": "icon"
 	    }, React.createElement("span", {
 	      "className": "preview"
-	    })), React.createElement("p", {
-	      "className": "name",
-	      "tilte": this.props.data.name
-	    }, this.props.data.name));
+	    })), React.createElement(FileNameItem, {
+	      "ref": "fileName",
+	      "name": this.props.data.name,
+	      "onChange": this.handleRename.bind(this)
+	    }));
 	  };
 	
 	  return DirItem;
@@ -440,11 +503,13 @@
   \*********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	var FileItem,
+	var FileItem, FileNameItem,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
 	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
+	
+	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 25);
 	
 	module.exports = FileItem = (function(superClass) {
 	  extend(FileItem, superClass);
@@ -463,7 +528,7 @@
 	      case 'saveAs':
 	        return console.log("saveAs");
 	      case 'rename':
-	        return console.log("rename");
+	        return this.refs.fileName.edit();
 	      case 'delete':
 	        console.log("delete");
 	        if (this.props.data.isDirectory) {
@@ -496,24 +561,34 @@
 	    });
 	  };
 	
-	  FileItem.prototype.handleClick = function(e) {
+	  FileItem.prototype.handleClick = function(evt) {
 	    return this.props.onEvent("showDetail", {
 	      itemData: this.props.data
 	    });
 	  };
 	
+	  FileItem.prototype.handleRename = function(arg) {
+	    var newName, url;
+	    newName = arg.newName;
+	    url = "/rename" + this.props.data.relativePath + "?to=" + newName;
+	    return this._callApi('get', url, (function(_this) {
+	      return function() {
+	        return _this.props.onEvent("update", {
+	          itemData: _this.props.data
+	        });
+	      };
+	    })(this));
+	  };
+	
 	  FileItem.prototype.handleContextMenu = function(evt) {
-	    var rect;
 	    evt.preventDefault();
 	    evt.stopPropagation();
-	    rect = ReactDOM.findDOMNode(this).getBoundingClientRect();
-	    console.log(evt.pageX, evt.pageY);
 	    return this.props.onEvent("showContextMenu", {
 	      menuItems: this.contextMenuItems,
 	      itemData: this.props.data,
 	      position: {
 	        x: evt.pageX,
-	        y: evt.pageY
+	        y: evt.pageY - window.scrollY
 	      }
 	    });
 	  };
@@ -527,10 +602,11 @@
 	      "className": "icon"
 	    }, React.createElement("div", {
 	      "className": "preview"
-	    }, "File:")), React.createElement("p", {
-	      "className": "name",
-	      "tilte": this.props.data.name
-	    }, this.props.data.name));
+	    }, "File:")), React.createElement(FileNameItem, {
+	      "ref": "fileName",
+	      "name": this.props.data.name,
+	      "onChange": this.handleRename.bind(this)
+	    }));
 	  };
 	
 	  return FileItem;
@@ -545,13 +621,15 @@
   \**********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	var FileItem, ImageItem,
+	var FileItem, FileNameItem, ImageItem,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
 	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
 	
 	FileItem = __webpack_require__(/*! ./FileItem */ 9);
+	
+	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 25);
 	
 	module.exports = ImageItem = (function(superClass) {
 	  extend(ImageItem, superClass);
@@ -572,10 +650,11 @@
 	    }, React.createElement("img", {
 	      "src": src,
 	      "className": "preview"
-	    })), React.createElement("p", {
-	      "className": "name",
-	      "tilte": this.props.data.name
-	    }, this.props.data.name));
+	    })), React.createElement(FileNameItem, {
+	      "ref": "fileName",
+	      "name": this.props.data.name,
+	      "onChange": this.handleRename.bind(this)
+	    }));
 	  };
 	
 	  return ImageItem;
@@ -710,7 +789,8 @@
 	    'download': '下载',
 	    'saveAs': '另存为',
 	    'delete': '删除',
-	    'newDir': '创建文件夹'
+	    'newFolder': '新建文件夹',
+	    'refresh': '刷新'
 	  };
 	
 	  function ContextMenu() {
@@ -805,26 +885,26 @@
 	  }
 	
 	  FileUploadManager.prototype.handleDragHtml = function(currentDir, html) {
-	    var i, img, len, results, rootElem, srcs, url;
+	    var img, j, len, results1, rootElem, srcs, url;
 	    rootElem = $("<div>" + html.replace(/<script/g, '<_script') + "</div>");
 	    srcs = (function() {
-	      var i, len, ref, results;
+	      var j, len, ref, results1;
 	      ref = rootElem.find("img");
-	      results = [];
-	      for (i = 0, len = ref.length; i < len; i++) {
-	        img = ref[i];
-	        results.push(img.src);
+	      results1 = [];
+	      for (j = 0, len = ref.length; j < len; j++) {
+	        img = ref[j];
+	        results1.push(img.src);
 	      }
-	      return results;
+	      return results1;
 	    })();
 	    console.log(srcs);
 	    if (srcs.length === 0) {
 	      return false;
 	    }
-	    results = [];
-	    for (i = 0, len = srcs.length; i < len; i++) {
-	      url = srcs[i];
-	      results.push($.post("/grabImage" + currentDir, JSON.stringify({
+	    results1 = [];
+	    for (j = 0, len = srcs.length; j < len; j++) {
+	      url = srcs[j];
+	      results1.push($.post("/grabImage" + currentDir, JSON.stringify({
 	        url: url
 	      })).done((function(_this) {
 	        return function(data) {
@@ -836,34 +916,50 @@
 	        };
 	      })(this)));
 	    }
-	    return results;
+	    return results1;
 	  };
 	
-	  FileUploadManager.prototype.handleDragFiles = function(currentDir, files) {
-	    var f, i, len, p, totalSize;
-	    totalSize = 0;
-	    for (i = 0, len = files.length; i < len; i++) {
-	      f = files[i];
-	      totalSize += f.size;
-	    }
-	    console.log("total file size is " + (totalSize / 1024 / 1024) + "MB");
-	    p = Promise.resolve();
-	    Array.prototype.forEach.call(files, (function(_this) {
-	      return function(f) {
-	        return p = p.then(function() {
-	          return _this.uploadFile(currentDir, f);
+	  FileUploadManager.prototype.handleDragFiles = function(currentDir, items) {
+	    return this._readDataTransferItems(items).then((function(_this) {
+	      return function(arg) {
+	        var emptyFolderPaths, f, files, j, k, len, len1, p, path, totalSize;
+	        files = arg[0], emptyFolderPaths = arg[1];
+	        console.log(files, emptyFolderPaths);
+	        totalSize = 0;
+	        for (j = 0, len = files.length; j < len; j++) {
+	          f = files[j];
+	          totalSize += f.size;
+	        }
+	        console.log("total file size is " + (totalSize / 1024 / 1024) + "MB");
+	        p = Promise.resolve();
+	        console.log(files.length + " files to go");
+	        files.forEach(function(file) {
+	          return p = p.then(function() {
+	            var dir, relativeDir;
+	            relativeDir = file.relativeDir.slice(1);
+	            console.log(relativeDir);
+	            dir = "" + currentDir + relativeDir;
+	            return _this.uploadFile(dir, file);
+	          });
+	        });
+	        for (k = 0, len1 = emptyFolderPaths.length; k < len1; k++) {
+	          path = emptyFolderPaths[k];
+	          p = p.then(function() {
+	            return _this._createEmptyFolder(path);
+	          });
+	        }
+	        return p.then(function(e) {
+	          console.log("finished");
+	          return _this.emit("fileUploaded");
 	        });
 	      };
-	    })(this));
-	    return p.then((function(_this) {
+	    })(this))["catch"]((function(_this) {
 	      return function(e) {
-	        console.log("finished");
-	        return _this.emit("fileUploaded");
+	        console.error(e.stack);
+	        console.error("upload error");
+	        return _this.emit("uploadError", e);
 	      };
-	    })(this))["catch"](function(e) {
-	      console.error(e.stack);
-	      return console.error("upload error");
-	    });
+	    })(this));
 	  };
 	
 	  FileUploadManager.prototype.uploadFile = function(currentDir, file) {
@@ -872,9 +968,113 @@
 	      console.log("start upload " + file.name);
 	      uploader = new Uploader();
 	      uploader.upload(currentDir, file);
-	      return uploader.on("complete", function() {
+	      uploader.on("complete", function() {
 	        return resolve();
 	      });
+	      return uploader.on("error", function(e) {
+	        return reject(e);
+	      });
+	    });
+	  };
+	
+	  FileUploadManager.prototype._createEmptyFolder = function(path) {
+	    return new Promise(function(resolve, reject) {
+	      console.log("/newFolder" + path);
+	      return $.get("/newFolder" + path).done((function(_this) {
+	        return function(res) {
+	          return resolve();
+	        };
+	      })(this)).fail(function(e) {
+	        return reject(e);
+	      });
+	    });
+	  };
+	
+	  FileUploadManager.prototype._readDataTransferItems = function(items) {
+	    var emptyFolders, files, folders;
+	    console.log(items.length);
+	    items = Array.prototype.map.call(items, function(i) {
+	      return i.webkitGetAsEntry();
+	    });
+	    files = items.filter(function(i) {
+	      return i.isFile;
+	    });
+	    files.forEach(function(i) {
+	      return i.relativeDir = '/';
+	    });
+	    folders = items.filter(function(i) {
+	      return i.isDirectory;
+	    });
+	    emptyFolders = [];
+	    return new Promise(function(resolve, reject) {
+	      var iter;
+	      iter = function() {
+	        var folder, reader;
+	        folder = folders.pop();
+	        if (!folder) {
+	          return resolve();
+	        }
+	        reader = folder.createReader();
+	        console.log("for folder " + folder.fullPath);
+	        return new Promise(function(_resolve) {
+	          var entries, gatherCounter, gatherEntriesFromFolder;
+	          entries = [];
+	          gatherCounter = 0;
+	          gatherEntriesFromFolder = function() {
+	            gatherCounter += 1;
+	            return reader.readEntries(function(results) {
+	              var entry, j, len;
+	              console.log("result:", results);
+	              if (results.length > 0) {
+	                for (j = 0, len = results.length; j < len; j++) {
+	                  entry = results[j];
+	                  entries.push(entry);
+	                }
+	                return gatherEntriesFromFolder();
+	              } else {
+	                if (gatherCounter === 1) {
+	                  emptyFolders.push(folder);
+	                }
+	                return _resolve(entries);
+	              }
+	            }, function(err) {
+	              return reject(err);
+	            });
+	          };
+	          return gatherEntriesFromFolder();
+	        }).then(function(entries) {
+	          var i, j, len;
+	          for (j = 0, len = entries.length; j < len; j++) {
+	            i = entries[j];
+	            if (i.isFile) {
+	              i.relativeDir = folder.fullPath;
+	              files.push(i);
+	            }
+	            if (i.isDirectory) {
+	              folders.push(i);
+	            }
+	          }
+	          return iter();
+	        });
+	      };
+	      return iter();
+	    }).then(function() {
+	      return Promise.all(files.map(function(f) {
+	        return new Promise(function(resolve, reject) {
+	          return f.file(function(file) {
+	            file.relativeDir = f.relativeDir;
+	            return resolve(file);
+	          }, function(err) {
+	            return reject(err);
+	          });
+	        });
+	      }));
+	    }).then(function(fileObjects) {
+	      var emptyFolderPaths;
+	      emptyFolderPaths = emptyFolders.map(function(f) {
+	        return f.fullPath;
+	      });
+	      return Promise.resolve([fileObjects, emptyFolderPaths]);
 	    });
 	  };
 	
@@ -923,21 +1123,26 @@
 	    xhr = new XMLHttpRequest();
 	    xhr.open("GET", "/check" + this.currentDir + "?filename=" + this.file.name + "&size=" + this.file.size);
 	    xhr.send();
-	    xhr.onload = (function(_this) {
-	      return function() {
-	        return _this.doUpload();
-	      };
-	    })(this);
-	    return xhr.onerror = (function(_this) {
-	      return function(e) {
-	        console.error(e);
-	        return _this.emit("error", e);
+	    return xhr.onreadystatechange = (function(_this) {
+	      return function(evt) {
+	        if (xhr.readyState === 4) {
+	          if (xhr.status === 200) {
+	            return _this.doUpload();
+	          } else {
+	            console.error("preCheck error for file:", _this.file);
+	            return _this.emit("error", xhr.responseText);
+	          }
+	        }
 	      };
 	    })(this);
 	  };
 	
 	  Uploader.prototype.doUpload = function() {
-	    this.sliceCount = Math.ceil(this.file.size / this.sliceSize);
+	    if (this.file.size > 0) {
+	      this.sliceCount = Math.ceil(this.file.size / this.sliceSize);
+	    } else {
+	      this.sliceCount = 1;
+	    }
 	    this.availThreads = this.maxThreads;
 	    console.log("sliceCount is " + this.sliceCount);
 	    this.currentSlice = 0;
@@ -977,10 +1182,14 @@
 	      return;
 	    }
 	    name = this.file.name;
-	    start = slice * this.sliceSize;
-	    stop = (slice + 1) * this.sliceSize - 1;
-	    if (stop > (this.file.size - 1)) {
-	      stop = this.file.size - 1;
+	    if (this.file.size > 0) {
+	      start = slice * this.sliceSize;
+	      stop = (slice + 1) * this.sliceSize - 1;
+	      if (stop > (this.file.size - 1)) {
+	        stop = this.file.size - 1;
+	      }
+	    } else {
+	      start = stop = 0;
 	    }
 	    bolb = this.file.slice(start, stop + 1);
 	    reader = new FileReader();
@@ -1004,14 +1213,15 @@
 	        }
 	      };
 	    })(this);
-	    xhr.upload.onload = (function(_this) {
-	      return function(e) {
-	        return _this.emit("sliceComplete", slice);
-	      };
-	    })(this);
-	    xhr.upload.onerror = (function(_this) {
-	      return function(error) {
-	        return _this.emit("error", error);
+	    xhr.onreadystatechange = (function(_this) {
+	      return function(evt) {
+	        if (xhr.readyState === 4) {
+	          if (xhr.status === 200) {
+	            return _this.emit("sliceComplete", slice);
+	          } else {
+	            return _this.emit("error", xhr.responseText);
+	          }
+	        }
 	      };
 	    })(this);
 	    url = "/upload" + this.currentDir + "?start=" + start + "&stop=" + stop + "&filename=" + name;
@@ -1022,10 +1232,15 @@
 	    var i, j, parts, ref;
 	    this.xhr = new XMLHttpRequest();
 	    parts = new Uint8Array(data.length);
-	    for (i = j = 0, ref = data.length - 1; 0 <= ref ? j <= ref : j >= ref; i = 0 <= ref ? ++j : --j) {
-	      parts[i] = data[i].charCodeAt(0);
+	    if (data.length > 0) {
+	      parts = new Uint8Array(data.length);
+	      for (i = j = 0, ref = data.length - 1; 0 <= ref ? j <= ref : j >= ref; i = 0 <= ref ? ++j : --j) {
+	        parts[i] = data[i].charCodeAt(0);
+	      }
+	      return xhr.send(parts.buffer);
+	    } else {
+	      return xhr.send('');
 	    }
-	    return xhr.send(parts.buffer);
 	  };
 	
 	  Uploader.prototype.showResult = function(res, label) {
@@ -1045,6 +1260,87 @@
 	  return Uploader;
 	
 	})(EventEmitter);
+
+
+/***/ },
+/* 24 */,
+/* 25 */
+/*!*************************************************!*\
+  !*** ./client/src/components/FileNameItem.cjsx ***!
+  \*************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	var FileNameItem,
+	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+	  hasProp = {}.hasOwnProperty;
+	
+	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
+	
+	module.exports = FileNameItem = (function(superClass) {
+	  extend(FileNameItem, superClass);
+	
+	  function FileNameItem() {
+	    FileNameItem.__super__.constructor.apply(this, arguments);
+	    this.state = {
+	      editing: false
+	    };
+	  }
+	
+	  FileNameItem.prototype.edit = function() {
+	    return this.setState({
+	      editing: true
+	    }, (function(_this) {
+	      return function() {
+	        _this.refs.input.focus();
+	        return _this.refs.input.select();
+	      };
+	    })(this));
+	  };
+	
+	  FileNameItem.prototype.handleKeyDown = function(evt) {
+	    switch (evt.keyCode) {
+	      case Suzaku.Key.enter:
+	        console.log(evt.target.value);
+	        this.props.onChange({
+	          newName: evt.target.value
+	        });
+	        return this.setState({
+	          editing: false
+	        });
+	    }
+	  };
+	
+	  FileNameItem.prototype.handleClick = function(evt) {
+	    return evt.stopPropagation();
+	  };
+	
+	  FileNameItem.prototype.handleBlur = function(evt) {
+	    return this.setState({
+	      editing: false
+	    });
+	  };
+	
+	  FileNameItem.prototype.render = function() {
+	    if (this.state.editing) {
+	      return React.createElement("input", {
+	        "ref": "input",
+	        "className": "file-name-input",
+	        "type": "text",
+	        "onClick": this.handleClick.bind(this),
+	        "onKeyDown": this.handleKeyDown.bind(this),
+	        "onBlur": this.handleBlur.bind(this),
+	        "defaultValue": this.props.name
+	      });
+	    } else {
+	      return React.createElement("p", {
+	        "className": "name"
+	      }, this.props.name);
+	    }
+	  };
+	
+	  return FileNameItem;
+	
+	})(React.Component);
 
 
 /***/ }

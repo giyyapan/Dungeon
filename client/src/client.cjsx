@@ -25,28 +25,32 @@ class DungeonClient extends Suzaku.EventEmitter
     super
     @uploadManager = new FileUploadManager this
 
-    window.addEventListener "dragover",(e)=>
+    window.addEventListener "dragover",(evt)=>
       console.log "over"
-      e.preventDefault()
-    window.addEventListener "dragleave",(e)=>
+      evt.preventDefault()
+    window.addEventListener "dragleave",(evt)=>
       console.log "leave"
-      e.preventDefault()
-    window.addEventListener "drop",(e)=>
-      e.stopPropagation()
-      e.preventDefault()
+      evt.preventDefault()
+    window.addEventListener "drop",(evt)=>
+      evt.stopPropagation()
+      evt.preventDefault()
       currentDir = @filesPanel.state.currentDir
-      dt = e.dataTransfer
-      if dt.files.length > 0
-        @uploadManager.handleDragFiles currentDir,dt.files
-        @emit "uploading"
-      else if dt.getData('text/html')
+      dt = evt.dataTransfer
+      console.log dt.items
+      if dt.getData('text/html')
         @uploadManager.handleDragHtml currentDir,dt.getData('text/html')
+        @emit "uploading"
+      else if dt.items.length > 0
+        @uploadManager.handleDragFiles currentDir,dt.items
         @emit "uploading"
       else
         console.log "drop event unhandled"
 
     @uploadManager.on "fileUploaded",=>
       @filesPanel.listDir()
+
+    @uploadManager.on "uploadError",(e)=>
+      @filesPanel.showMessage "uploadError"
 
     @filesPanel = ReactDOM.render <FilesPanel client={this}/>,$("#main-container")[0]
 

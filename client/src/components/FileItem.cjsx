@@ -1,4 +1,5 @@
 require '../styles/filesPanel.less'
+FileNameItem = require './FileNameItem'
 
 module.exports =
   class FileItem extends React.Component
@@ -11,7 +12,7 @@ module.exports =
         when 'saveAs'
           console.log "saveAs"
         when 'rename'
-          console.log "rename"
+          @refs.fileName.edit()
         when 'delete'
           console.log "delete"
           if @props.data.isDirectory
@@ -34,18 +35,25 @@ module.exports =
       .fail (e)->
         console.error e
 
-    handleClick:(e)->
+    handleClick:(evt)->
       @props.onEvent "showDetail",{itemData:@props.data}
+
+    handleRename:({newName})->
+      url = "/rename#{@props.data.relativePath}?to=#{newName}"
+      @_callApi 'get',url,=>
+        @props.onEvent "update",{itemData:@props.data}
 
     handleContextMenu:(evt)->
       evt.preventDefault()
       evt.stopPropagation()
-      rect = ReactDOM.findDOMNode(@).getBoundingClientRect()
-      console.log evt.pageX,evt.pageY
+      #rect = ReactDOM.findDOMNode(@).getBoundingClientRect()
+      #console.log evt.pageX,evt.pageY
       @props.onEvent "showContextMenu",
         menuItems: @contextMenuItems
         itemData: @props.data
-        position: x:evt.pageX,y:evt.pageY
+        position:
+          x:evt.pageX
+          y:evt.pageY - window.scrollY
 
     render:->
       <div className="file-panel-item file-item"
@@ -55,6 +63,8 @@ module.exports =
         <div className="icon">
           <div className="preview">File:</div>
         </div>
-        <p className="name" tilte={@props.data.name}>{@props.data.name}</p>
 
+        <FileNameItem ref="fileName"
+          name={@props.data.name}
+          onChange={@handleRename.bind(@)} />
       </div>

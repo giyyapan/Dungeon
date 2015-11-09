@@ -6,6 +6,7 @@
 }
 ul,
 ol {
+  margin: 0;
   list-style: none;
   padding: 0;
 }
@@ -21,7 +22,6 @@ html {
 }
 body {
   width: 100%;
-  height: 100%;
   padding: 0;
   margin: 0;
   text-align: center;
@@ -42,6 +42,10 @@ body {
   z-index: 100;
   position: fixed;
 }
+.clearfix {
+  clear: both;
+  display: block;
+}
 .files-panel {
   position: relative;
   display: block;
@@ -50,12 +54,6 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.2);
   background-color: #fcfcfc;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  padding-bottom: 200px;
-}
-.files-panel:after {
-  content: "";
-  display: table;
-  clear: both;
 }
 .files-panel .main-header {
   text-align: left;
@@ -76,14 +74,21 @@ body {
 }
 .files-panel .files-holder {
   position: relative;
+  padding-bottom: 200px;
 }
 .files-panel .files-holder .message-holder {
   position: absolute;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(197, 197, 197, 0.8);
   padding: 5px;
-  left: 0;
-  width: 100%;
-  color: white;
+  left: 50%;
+  color: #565656;
+  margin: 2px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+  transform: translateX(-50%);
+  border-radius: 1px;
+}
+.files-panel .files-holder .message-holder .error {
+  color: #B12B00;
 }
 .file-panel-item {
   box-sizing: border-box;
@@ -110,6 +115,17 @@ body {
 }
 .file-panel-item .preview {
   box-sizing: border-box;
+}
+.file-panel-item .file-name-input {
+  transform: translateY(-3px);
+  font-size: 16px;
+  outline: none;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+  word-break: break-word;
+  display: inline-block;
+  height: 40px;
 }
 .file-panel-item:hover {
   background: #f5f5f5;

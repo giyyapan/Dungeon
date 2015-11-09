@@ -7,7 +7,8 @@ module.exports =
       'download':'下载'
       'saveAs':'另存为'
       'delete':'删除'
-      'newDir':'创建文件夹'
+      'newFolder':'新建文件夹'
+      'refresh':'刷新'
 
     constructor:()->
       super

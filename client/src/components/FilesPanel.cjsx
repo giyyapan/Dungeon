@@ -18,7 +18,7 @@ module.exports =
     constructor:()->
       super
       @state =
-        currentDir:"/"
+        currentDir:"/" # .e.g : "/" "/movie" "/movie/sf"
         items:[]
         error:false
         dirStack:[]
@@ -63,12 +63,44 @@ module.exports =
     componentDidMount:->
       @listDir()
 
-    showDetail:({itemType,itemData})->
+    showMessage:(msg)->
+      @setState message:msg
+
+    _showItemDetail:({itemType,itemData})->
       @refs.detailPanel.showDetail itemType,itemData
 
-    onMenuItemClick:({key,itemData})->
+    createNewFolder:->
+      name = window.prompt "请输入名称："
+      if name.indexOf("/") > -1
+        return alert "文件名不能含有'/'"
+      return if not name
+      $.get "/newFolder#{@state.currentDir}/#{name}"
+      .done (res)=>
+        @listDir()
+      .fail (e)->
+        console.error e
+
+    handleMenuItemClick:({key,itemData})->
       action = key
-      @refs[itemData.relativePath].doFileAction action
+      if itemData
+        @refs[itemData.relativePath].doFileAction action
+      else
+        switch action
+          when 'newFolder'
+            @createNewFolder()
+          when 'refresh'
+            @refresh()
+
+    handleContextMenu:(evt)->
+      console.log "contextMenu"
+      evt.stopPropagation()
+      evt.preventDefault()
+      @refs.contextMenu.show
+        menuItems:['newFolder','refresh']
+        itemData: null
+        position:
+          x:evt.pageX
+          y:evt.pageY - window.scrollY
 
     handleItemEvent:(event,data)->
       if data.itemData
@@ -77,7 +109,7 @@ module.exports =
         when 'enterDir'
           @changeDir data
         when 'showDetail'
-          @showDetail data
+          @_showItemDetail data
         when 'showContextMenu'
           @refs.contextMenu.show data
         when 'update'
@@ -99,26 +131,23 @@ module.exports =
     render:->
       <section className="files-panel">
         <DetailPanel ref="detailPanel"/>
-        <ContextMenu ref="contextMenu" onItemClick={@onMenuItemClick.bind(@)}/>
+        <ContextMenu ref="contextMenu" onItemClick={@handleMenuItemClick.bind(@)}/>
         <header className="main-header">
           <button onClick={@refresh.bind(@)}>刷新</button>
           <button onClick={@goBack.bind(@)}>后退</button>
           <span className="current-path">{@state.currentDir}</span>
         </header>
-        <div className="files-holder">
+        <div className="files-holder" onContextMenu={@handleContextMenu.bind(@)}>
           {
             if @state.message
-              <span className="message-holder">{
+              <p className="message-holder">{
                 switch @state.message
-                  when "loading"
-                    "载入中"
-                  when "error"
-                    "载入错误"
-                  when "empty"
-                    "没有文件"
-                  when "uploading"
-                    "上传中..."
-              }</span>
+                  when "loading" then "载入中"
+                  when "error" then "载入错误"
+                  when "empty" then "没有文件"
+                  when "uploading" then "上传中..."
+                  when "uploadError" then <span className="error">上传错误！</span>
+              }</p>
           }
           {
             ft = FilesPanel.FileTypes
@@ -137,5 +166,6 @@ module.exports =
                     ref={item.relativePath} data={item}
                     onEvent={@handleItemEvent.bind(@)} />
           }
+          <div className="clearfix"></div>
         </div>
       </section>
