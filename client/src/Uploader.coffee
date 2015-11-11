@@ -1,32 +1,39 @@
 EventEmitter = Suzaku.EventEmitter
-
-size =
-  kb:1024
-  mb:1024 * 1024
+utils = require './clientUtils'
 
 module.exports =
   class Uploader extends EventEmitter
     constructor:()->
       super
-      @sliceSize = 3 * size.mb
+      @sliceSize = 3 * utils.SIZE.MB
       #maxThreads = 3
       @maxThreads = 2
       @file = null
       @availThreads = 0
       @sliceCount = 0
       @apiPath = null
+      @completedSlices = 0
       @currentSlice = 0
       @currentDir = "/"
 
     upload:(@currentDir,@file)->
       #check
+      if @file.size > 0
+        @sliceCount = Math.ceil(@file.size/@sliceSize)
+      else
+        @sliceCount = 1
+      @preCheck =>
+        @doUpload()
+
+    preCheck:(callback)->
       xhr = new XMLHttpRequest()
-      xhr.open "GET","/check#{@currentDir}?filename=#{@file.name}&size=#{@file.size}"
+      args = "filename=#{@file.name}&size=#{@file.size}&sliceCount=#{@sliceCount}"
+      xhr.open "GET","/check#{@currentDir}?#{args}"
       xhr.send()
       xhr.onreadystatechange = (evt)=>
         if xhr.readyState is 4
           if xhr.status is 200
-            @doUpload()
+            callback()
           else
             console.error "preCheck error for file:",@file
             @emit "error",xhr.responseText
@@ -38,10 +45,6 @@ module.exports =
       #   console.log r.result
       #   @showResult r.result
       #   r = null
-      if @file.size > 0
-        @sliceCount = Math.ceil(@file.size/@sliceSize)
-      else
-        @sliceCount = 1
       @availThreads = @maxThreads
       console.log "sliceCount is #{@sliceCount}"
       @currentSlice = 0
@@ -54,12 +57,11 @@ module.exports =
 
       @on "sliceComplete",(slice)=>
         @availThreads += 1
-        if slice < (@sliceCount - 1)
-          #still has slice to upload
-          @uploadNextSlice()
-        else if @availThreads is @maxThreads
-          #all slice has been uploaded
+        @completedSlices += 1
+        if @completedSlices is @sliceCount
           @emit "complete"
+        else
+          @uploadNextSlice()
 
       @uploadNextSlice()
 
@@ -100,7 +102,7 @@ module.exports =
       xhr.onreadystatechange = (evt)=>
         if xhr.readyState is 4
           if xhr.status is 200
-            @emit "sliceComplete",slice
+            @emit "sliceComplete",slice,@completedSlices,@sliceCount
           else
             @emit "error",xhr.responseText
       url = "/upload#{@currentDir}?start=#{start}&stop=#{stop}&filename=#{name}"

@@ -41,13 +41,32 @@ class DungeonClient extends Suzaku.EventEmitter
         @uploadManager.handleDragHtml currentDir,dt.getData('text/html')
         @emit "uploading"
       else if dt.items.length > 0
+        console.log "length::",dt.items.length
         @uploadManager.handleDragFiles currentDir,dt.items
         @emit "uploading"
       else
         console.log "drop event unhandled"
 
     @uploadManager.on "fileUploaded",=>
-      @filesPanel.listDir()
+      @filesPanel.listDir false
+
+    @uploadManager.on "allFileUploaded",=>
+      setTimeout =>
+        @filesPanel.showMessage "uploadComplete",null,3000
+      ,1
+
+    _lastPercentage = 0
+    @uploadManager.on "sliceComplete",
+      (filename,completedSlices,sliceCount,completeFileCount,fileCount)=>
+        now = Date.now()
+        percentage = Math.round (completedSlices/sliceCount)*100
+        if percentage != _lastPercentage
+          _lastPercentage = percentage
+          @filesPanel.showMessage "uploading",
+            filename:filename
+            percentage:percentage
+            completeFileCount:completeFileCount
+            fileCount:fileCount
 
     @uploadManager.on "uploadError",(e)=>
       @filesPanel.showMessage "uploadError"

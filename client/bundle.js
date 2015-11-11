@@ -55,12 +55,13 @@
 	
 	FilesPanel = __webpack_require__(/*! ./components/FilesPanel */ 5);
 	
-	FileUploadManager = __webpack_require__(/*! ./FileUploadManager */ 22);
+	FileUploadManager = __webpack_require__(/*! ./FileUploadManager */ 18);
 	
 	DungeonClient = (function(superClass) {
 	  extend(DungeonClient, superClass);
 	
 	  function DungeonClient() {
+	    var _lastPercentage;
 	    DungeonClient.__super__.constructor.apply(this, arguments);
 	    this.uploadManager = new FileUploadManager(this);
 	    window.addEventListener("dragover", (function(_this) {
@@ -87,6 +88,7 @@
 	          _this.uploadManager.handleDragHtml(currentDir, dt.getData('text/html'));
 	          return _this.emit("uploading");
 	        } else if (dt.items.length > 0) {
+	          console.log("length::", dt.items.length);
 	          _this.uploadManager.handleDragFiles(currentDir, dt.items);
 	          return _this.emit("uploading");
 	        } else {
@@ -96,7 +98,31 @@
 	    })(this));
 	    this.uploadManager.on("fileUploaded", (function(_this) {
 	      return function() {
-	        return _this.filesPanel.listDir();
+	        return _this.filesPanel.listDir(false);
+	      };
+	    })(this));
+	    this.uploadManager.on("allFileUploaded", (function(_this) {
+	      return function() {
+	        return setTimeout(function() {
+	          return _this.filesPanel.showMessage("uploadComplete", null, 3000);
+	        }, 1);
+	      };
+	    })(this));
+	    _lastPercentage = 0;
+	    this.uploadManager.on("sliceComplete", (function(_this) {
+	      return function(filename, completedSlices, sliceCount, completeFileCount, fileCount) {
+	        var now, percentage;
+	        now = Date.now();
+	        percentage = Math.round((completedSlices / sliceCount) * 100);
+	        if (percentage !== _lastPercentage) {
+	          _lastPercentage = percentage;
+	          return _this.filesPanel.showMessage("uploading", {
+	            filename: filename,
+	            percentage: percentage,
+	            completeFileCount: completeFileCount,
+	            fileCount: fileCount
+	          });
+	        }
 	      };
 	    })(this));
 	    this.uploadManager.on("uploadError", (function(_this) {
@@ -136,7 +162,7 @@
   \***********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	var ContextMenu, DetailPanel, DirItem, FileItem, FilesPanel, ImageItem,
+	var ContextMenu, DetailPanel, DirItem, FileItem, FilesPanel, ImageItem, MessageHolder, utils,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
@@ -146,11 +172,15 @@
 	
 	FileItem = __webpack_require__(/*! ./FileItem */ 9);
 	
-	ImageItem = __webpack_require__(/*! ./ImageItem */ 10);
+	ImageItem = __webpack_require__(/*! ./ImageItem */ 11);
 	
-	DetailPanel = __webpack_require__(/*! ./DetailPanel */ 11);
+	DetailPanel = __webpack_require__(/*! ./DetailPanel */ 12);
 	
-	ContextMenu = __webpack_require__(/*! ./ContextMenu */ 20);
+	ContextMenu = __webpack_require__(/*! ./ContextMenu */ 15);
+	
+	MessageHolder = __webpack_require__(/*! ./MessageHolder */ 21);
+	
+	utils = __webpack_require__(/*! ../clientUtils */ 20);
 	
 	module.exports = FilesPanel = (function(superClass) {
 	  extend(FilesPanel, superClass);
@@ -181,7 +211,14 @@
 	    })(this));
 	  }
 	
-	  FilesPanel.prototype.listDir = function() {
+	  FilesPanel.prototype.listDir = function(showMessage) {
+	    if (showMessage == null) {
+	      showMessage = true;
+	    }
+	    if (this._isLoading) {
+	      return;
+	    }
+	    this._isLoading = true;
 	    return $.get("/listDir" + this.state.currentDir, (function(_this) {
 	      return function(data) {
 	        var message;
@@ -194,36 +231,62 @@
 	        } else {
 	          message = null;
 	        }
-	        return _this.setState({
-	          items: data.items,
-	          message: message
-	        });
+	        _this._isLoading = false;
+	        if (showMessage) {
+	          _this.setState({
+	            items: data.items,
+	            message: message
+	          });
+	          return setTimeout(function() {
+	            return _this.setState({
+	              message: null
+	            });
+	          }, 3000);
+	        } else {
+	          return _this.setState({
+	            items: data.items
+	          });
+	        }
 	      };
 	    })(this)).fail((function(_this) {
 	      return function(e) {
+	        _this._isLoading = false;
 	        console.log("error", e);
-	        return _this.setState({
-	          error: true,
-	          message: 'error'
-	        });
+	        if (showMessage) {
+	          return _this.setState({
+	            error: true,
+	            message: 'error'
+	          });
+	        }
 	      };
 	    })(this));
 	  };
 	
-	  FilesPanel.prototype.changeDir = function(arg) {
+	  FilesPanel.prototype.enterDir = function(arg) {
 	    var dirStack, newDir;
 	    newDir = arg.newDir;
 	    dirStack = this.state.dirStack.map(function(d) {
 	      return d;
 	    });
 	    dirStack.push(this.state.currentDir);
-	    return this.setState({
-	      currentDir: newDir,
-	      dirStack: dirStack,
-	      message: 'loading'
-	    }, (function(_this) {
+	    return this.changeDir(newDir, dirStack);
+	  };
+	
+	  FilesPanel.prototype.changeDir = function(dir, dirStack) {
+	    var showMessage, state;
+	    state = {
+	      currentDir: dir
+	    };
+	    showMessage = this.state.message ? false : true;
+	    if (showMessage) {
+	      state.message = 'loading';
+	    }
+	    if (dirStack) {
+	      state.dirStack = dirStack;
+	    }
+	    return this.setState(state, (function(_this) {
 	      return function() {
-	        return _this.listDir();
+	        return _this.listDir(showMessage);
 	      };
 	    })(this));
 	  };
@@ -237,15 +300,7 @@
 	      return;
 	    }
 	    dir = dirStack.pop();
-	    return this.setState({
-	      currentDir: dir,
-	      dirStack: dirStack,
-	      message: "loading"
-	    }, (function(_this) {
-	      return function() {
-	        return _this.listDir();
-	      };
-	    })(this));
+	    return this.changeDir(dir, dirStack);
 	  };
 	
 	  FilesPanel.prototype.refresh = function() {
@@ -259,10 +314,25 @@
 	    return this.listDir();
 	  };
 	
-	  FilesPanel.prototype.showMessage = function(msg) {
-	    return this.setState({
-	      message: msg
+	  FilesPanel.prototype.showMessage = function(msg, data, timeout) {
+	    var msgId;
+	    msgId = utils.getTimeBasedId();
+	    this.setState({
+	      message: msg,
+	      messageData: data,
+	      messageId: msgId
 	    });
+	    if (timeout) {
+	      return setTimeout((function(_this) {
+	        return function() {
+	          if (_this.state.messageId === msgId) {
+	            return _this.setState({
+	              message: null
+	            });
+	          }
+	        };
+	      })(this), timeout);
+	    }
 	  };
 	
 	  FilesPanel.prototype._showItemDetail = function(arg) {
@@ -325,7 +395,7 @@
 	    }
 	    switch (event) {
 	      case 'enterDir':
-	        return this.changeDir(data);
+	        return this.enterDir(data);
 	      case 'showDetail':
 	        return this._showItemDetail(data);
 	      case 'showContextMenu':
@@ -374,24 +444,10 @@
 	    }, this.state.currentDir)), React.createElement("div", {
 	      "className": "files-holder",
 	      "onContextMenu": this.handleContextMenu.bind(this)
-	    }, (this.state.message ? React.createElement("p", {
-	      "className": "message-holder"
-	    }, ((function() {
-	      switch (this.state.message) {
-	        case "loading":
-	          return "载入中";
-	        case "error":
-	          return "载入错误";
-	        case "empty":
-	          return "没有文件";
-	        case "uploading":
-	          return "上传中...";
-	        case "uploadError":
-	          return React.createElement("span", {
-	            "className": "error"
-	          }, "上传错误！");
-	      }
-	    }).call(this))) : void 0), ((function() {
+	    }, React.createElement(MessageHolder, {
+	      "message": this.state.message,
+	      "messageData": this.state.messageData
+	    }), ((function() {
 	      var i, len, ref, results;
 	      ft = FilesPanel.FileTypes;
 	      ref = this.state.items;
@@ -460,7 +516,7 @@
 	
 	FileItem = __webpack_require__(/*! ./FileItem */ 9);
 	
-	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 25);
+	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 10);
 	
 	module.exports = DirItem = (function(superClass) {
 	  extend(DirItem, superClass);
@@ -509,7 +565,7 @@
 	
 	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
 	
-	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 25);
+	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 10);
 	
 	module.exports = FileItem = (function(superClass) {
 	  extend(FileItem, superClass);
@@ -616,6 +672,86 @@
 
 /***/ },
 /* 10 */
+/*!*************************************************!*\
+  !*** ./client/src/components/FileNameItem.cjsx ***!
+  \*************************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	var FileNameItem,
+	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+	  hasProp = {}.hasOwnProperty;
+	
+	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
+	
+	module.exports = FileNameItem = (function(superClass) {
+	  extend(FileNameItem, superClass);
+	
+	  function FileNameItem() {
+	    FileNameItem.__super__.constructor.apply(this, arguments);
+	    this.state = {
+	      editing: false
+	    };
+	  }
+	
+	  FileNameItem.prototype.edit = function() {
+	    return this.setState({
+	      editing: true
+	    }, (function(_this) {
+	      return function() {
+	        _this.refs.input.focus();
+	        return _this.refs.input.select();
+	      };
+	    })(this));
+	  };
+	
+	  FileNameItem.prototype.handleKeyDown = function(evt) {
+	    switch (evt.keyCode) {
+	      case Suzaku.Key.enter:
+	        console.log(evt.target.value);
+	        this.props.onChange({
+	          newName: evt.target.value
+	        });
+	        return this.setState({
+	          editing: false
+	        });
+	    }
+	  };
+	
+	  FileNameItem.prototype.handleClick = function(evt) {
+	    return evt.stopPropagation();
+	  };
+	
+	  FileNameItem.prototype.handleBlur = function(evt) {
+	    return this.setState({
+	      editing: false
+	    });
+	  };
+	
+	  FileNameItem.prototype.render = function() {
+	    if (this.state.editing) {
+	      return React.createElement("input", {
+	        "ref": "input",
+	        "className": "file-name-input",
+	        "type": "text",
+	        "onClick": this.handleClick.bind(this),
+	        "onKeyDown": this.handleKeyDown.bind(this),
+	        "onBlur": this.handleBlur.bind(this),
+	        "defaultValue": this.props.name
+	      });
+	    } else {
+	      return React.createElement("p", {
+	        "className": "name"
+	      }, this.props.name);
+	    }
+	  };
+	
+	  return FileNameItem;
+	
+	})(React.Component);
+
+
+/***/ },
+/* 11 */
 /*!**********************************************!*\
   !*** ./client/src/components/ImageItem.cjsx ***!
   \**********************************************/
@@ -629,7 +765,7 @@
 	
 	FileItem = __webpack_require__(/*! ./FileItem */ 9);
 	
-	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 25);
+	FileNameItem = __webpack_require__(/*! ./FileNameItem */ 10);
 	
 	module.exports = ImageItem = (function(superClass) {
 	  extend(ImageItem, superClass);
@@ -663,7 +799,7 @@
 
 
 /***/ },
-/* 11 */
+/* 12 */
 /*!************************************************!*\
   !*** ./client/src/components/DetailPanel.cjsx ***!
   \************************************************/
@@ -673,7 +809,7 @@
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
-	__webpack_require__(/*! ../styles/detailPanel.less */ 12);
+	__webpack_require__(/*! ../styles/detailPanel.less */ 13);
 	
 	module.exports = DetailPanel = (function(superClass) {
 	  extend(DetailPanel, superClass);
@@ -745,7 +881,7 @@
 
 
 /***/ },
-/* 12 */
+/* 13 */
 /*!********************************************!*\
   !*** ./client/src/styles/detailPanel.less ***!
   \********************************************/
@@ -754,22 +890,8 @@
 	// removed by extract-text-webpack-plugin
 
 /***/ },
-/* 13 */,
 /* 14 */,
-/* 15 */,
-/* 16 */,
-/* 17 */,
-/* 18 */
-/*!**************************************!*\
-  !*** ./client/src/styles/menus.less ***!
-  \**************************************/
-/***/ function(module, exports) {
-
-	// removed by extract-text-webpack-plugin
-
-/***/ },
-/* 19 */,
-/* 20 */
+/* 15 */
 /*!************************************************!*\
   !*** ./client/src/components/ContextMenu.cjsx ***!
   \************************************************/
@@ -779,7 +901,7 @@
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
-	__webpack_require__(/*! ../styles/menus.less */ 18);
+	__webpack_require__(/*! ../styles/menus.less */ 16);
 	
 	module.exports = ContextMenu = (function(superClass) {
 	  extend(ContextMenu, superClass);
@@ -862,20 +984,31 @@
 
 
 /***/ },
-/* 21 */,
-/* 22 */
+/* 16 */
+/*!**************************************!*\
+  !*** ./client/src/styles/menus.less ***!
+  \**************************************/
+/***/ function(module, exports) {
+
+	// removed by extract-text-webpack-plugin
+
+/***/ },
+/* 17 */,
+/* 18 */
 /*!*********************************************!*\
   !*** ./client/src/FileUploadManager.coffee ***!
   \*********************************************/
 /***/ function(module, exports, __webpack_require__) {
 
-	var EventEmitter, FileUploadManager, Uploader,
+	var EventEmitter, FileUploadManager, StatusMachine, Uploader,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
 	EventEmitter = Suzaku.EventEmitter;
 	
-	Uploader = __webpack_require__(/*! ./Uploader */ 23);
+	Uploader = __webpack_require__(/*! ./Uploader */ 19);
+	
+	StatusMachine = __webpack_require__(/*! ./StatusMachine */ 22);
 	
 	module.exports = FileUploadManager = (function(superClass) {
 	  extend(FileUploadManager, superClass);
@@ -920,10 +1053,22 @@
 	  };
 	
 	  FileUploadManager.prototype.handleDragFiles = function(currentDir, items) {
-	    return this._readDataTransferItems(items).then((function(_this) {
-	      return function(arg) {
-	        var emptyFolderPaths, f, files, j, k, len, len1, p, path, totalSize;
-	        files = arg[0], emptyFolderPaths = arg[1];
+	    this.completeFileCount = 0;
+	    items = Array.prototype.map.call(items, function(i) {
+	      return i.webkitGetAsEntry();
+	    });
+	    return new StatusMachine().status("initItems", function(data, status) {
+	      return status.next([items, null]);
+	    }).status("readDataTransferItems", (function(_this) {
+	      return function(arg, status) {
+	        var _items, unfinishedData;
+	        _items = arg[0], unfinishedData = arg[1];
+	        return status.nextTo(_this._readDataTransferItems(_items, unfinishedData));
+	      };
+	    })(this)).status("uploadFiles", (function(_this) {
+	      return function(arg, status) {
+	        var emptyFolderPaths, f, files, j, l, len, len1, p, path, totalSize, unfinishedData;
+	        files = arg[0], emptyFolderPaths = arg[1], unfinishedData = arg[2];
 	        console.log(files, emptyFolderPaths);
 	        totalSize = 0;
 	        for (j = 0, len = files.length; j < len; j++) {
@@ -933,6 +1078,7 @@
 	        console.log("total file size is " + (totalSize / 1024 / 1024) + "MB");
 	        p = Promise.resolve();
 	        console.log(files.length + " files to go");
+	        _this.fileCount += files.length;
 	        files.forEach(function(file) {
 	          return p = p.then(function() {
 	            var dir, relativeDir;
@@ -942,16 +1088,25 @@
 	            return _this.uploadFile(dir, file);
 	          });
 	        });
-	        for (k = 0, len1 = emptyFolderPaths.length; k < len1; k++) {
-	          path = emptyFolderPaths[k];
+	        for (l = 0, len1 = emptyFolderPaths.length; l < len1; l++) {
+	          path = emptyFolderPaths[l];
 	          p = p.then(function() {
 	            return _this._createEmptyFolder(path);
 	          });
 	        }
 	        return p.then(function(e) {
 	          console.log("finished");
-	          return _this.emit("fileUploaded");
+	          if (unfinishedData) {
+	            return status.goto("readDataTransferItems", [null, unfinishedData]);
+	          } else {
+	            return status.goto("allFileUploaded");
+	          }
 	        });
+	      };
+	    })(this)).status("allFileUploaded", (function(_this) {
+	      return function(data, status) {
+	        _this.emit("allFileUploaded");
+	        return status.complete();
 	      };
 	    })(this))["catch"]((function(_this) {
 	      return function(e) {
@@ -963,119 +1118,212 @@
 	  };
 	
 	  FileUploadManager.prototype.uploadFile = function(currentDir, file) {
-	    return new Promise(function(resolve, reject) {
-	      var uploader;
-	      console.log("start upload " + file.name);
-	      uploader = new Uploader();
-	      uploader.upload(currentDir, file);
-	      uploader.on("complete", function() {
-	        return resolve();
-	      });
-	      return uploader.on("error", function(e) {
-	        return reject(e);
-	      });
-	    });
+	    return new Promise((function(_this) {
+	      return function(resolve, reject) {
+	        var uploader;
+	        console.log("start upload " + file.name);
+	        uploader = new Uploader();
+	        uploader.upload(currentDir, file);
+	        uploader.on("sliceComplete", function(slice, completedSlices, sliceCount) {
+	          return _this.emit("sliceComplete", file.name, completedSlices, sliceCount, _this.completeFileCount, _this.fileCount);
+	        });
+	        uploader.on("complete", function() {
+	          _this.emit("fileUploaded");
+	          _this.completeFileCount += 1;
+	          return resolve();
+	        });
+	        return uploader.on("error", function(e) {
+	          return reject(e);
+	        });
+	      };
+	    })(this));
 	  };
 	
 	  FileUploadManager.prototype._createEmptyFolder = function(path) {
-	    return new Promise(function(resolve, reject) {
-	      console.log("/newFolder" + path);
-	      return $.get("/newFolder" + path).done((function(_this) {
-	        return function(res) {
+	    return new Promise((function(_this) {
+	      return function(resolve, reject) {
+	        console.log("/newFolder" + path);
+	        return $.get("/newFolder" + path).done(function(res) {
+	          _this.emit("fileUploaded");
 	          return resolve();
-	        };
-	      })(this)).fail(function(e) {
-	        return reject(e);
-	      });
-	    });
-	  };
-	
-	  FileUploadManager.prototype._readDataTransferItems = function(items) {
-	    var emptyFolders, files, folders;
-	    console.log(items.length);
-	    items = Array.prototype.map.call(items, function(i) {
-	      return i.webkitGetAsEntry();
-	    });
-	    files = items.filter(function(i) {
-	      return i.isFile;
-	    });
-	    files.forEach(function(i) {
-	      return i.relativeDir = '/';
-	    });
-	    folders = items.filter(function(i) {
-	      return i.isDirectory;
-	    });
-	    emptyFolders = [];
-	    return new Promise(function(resolve, reject) {
-	      var iter;
-	      iter = function() {
-	        var folder, reader;
-	        folder = folders.pop();
-	        if (!folder) {
-	          return resolve();
-	        }
-	        reader = folder.createReader();
-	        console.log("for folder " + folder.fullPath);
-	        return new Promise(function(_resolve) {
-	          var entries, gatherCounter, gatherEntriesFromFolder;
-	          entries = [];
-	          gatherCounter = 0;
-	          gatherEntriesFromFolder = function() {
-	            gatherCounter += 1;
-	            return reader.readEntries(function(results) {
-	              var entry, j, len;
-	              console.log("result:", results);
-	              if (results.length > 0) {
-	                for (j = 0, len = results.length; j < len; j++) {
-	                  entry = results[j];
-	                  entries.push(entry);
-	                }
-	                return gatherEntriesFromFolder();
-	              } else {
-	                if (gatherCounter === 1) {
-	                  emptyFolders.push(folder);
-	                }
-	                return _resolve(entries);
-	              }
-	            }, function(err) {
-	              return reject(err);
-	            });
-	          };
-	          return gatherEntriesFromFolder();
-	        }).then(function(entries) {
-	          var i, j, len;
-	          for (j = 0, len = entries.length; j < len; j++) {
-	            i = entries[j];
-	            if (i.isFile) {
-	              i.relativeDir = folder.fullPath;
-	              files.push(i);
-	            }
-	            if (i.isDirectory) {
-	              folders.push(i);
-	            }
-	          }
-	          return iter();
+	        }).fail(function(e) {
+	          return reject(e);
 	        });
 	      };
-	      return iter();
-	    }).then(function() {
-	      return Promise.all(files.map(function(f) {
+	    })(this));
+	  };
+	
+	  FileUploadManager.prototype._readDataTransferItems = function(items, unfinishedData) {
+	    return new StatusMachine().status("start", function() {
+	      var files;
+	      if (unfinishedData) {
+	        return this.goto("continueReadFolderEntries", unfinishedData);
+	      } else {
+	        files = items.filter(function(i) {
+	          return i && i.isFile;
+	        });
+	        files.forEach(function(i) {
+	          return i.relativeDir = '/';
+	        });
+	        this.set({
+	          files: files,
+	          folders: items.filter(function(i) {
+	            return i && i.isDirectory;
+	          }),
+	          emptyFolders: [],
+	          entries: []
+	        });
+	        return this.goto("handleNextFolder");
+	      }
+	    }).status("continueReadFolderEntries", function(unfinishedData) {
+	      this.set({
+	        files: [],
+	        folders: unfinishedData.folders,
+	        emptyFolders: [],
+	        entries: [],
+	        folder: unfinishedData.folder,
+	        gatherCounter: unfinishedData.gatherCounter,
+	        reader: unfinishedData.reader
+	      });
+	      return this.goto("readFolderEntries");
+	    }).status("handleNextFolder", function() {
+	      var folder, folders;
+	      folders = this.get("folders");
+	      folder = folders.pop();
+	      if (!folder) {
+	        console.log(1);
+	        return this.goto("getOutput");
+	      } else {
+	        this.set({
+	          folder: folder
+	        });
+	        return this.goto("travalseFolder");
+	      }
+	    }).status("travalseFolder", function() {
+	      var folder;
+	      folder = this.get('folder');
+	      console.log("for folder " + folder.fullPath);
+	      this.set({
+	        reader: folder.createReader(),
+	        entries: [],
+	        gatherCounter: 0
+	      });
+	      return this.next();
+	    }).status("readFolderEntries", function(data, status) {
+	      var emptyFolders, entries, folder, gatherCounter, reader;
+	      folder = this.get("folder");
+	      reader = this.get("reader");
+	      entries = this.get("entries");
+	      emptyFolders = this.get("emptyFolders");
+	      gatherCounter = this.get("gatherCounter") + 1;
+	      this.set({
+	        gatherCounter: gatherCounter
+	      });
+	      return reader.readEntries((function(_this) {
+	        return function(results) {
+	          var MAX_COUNT, entry, j, len;
+	          MAX_COUNT = 30;
+	          if (results.length > 0) {
+	            for (j = 0, len = results.length; j < len; j++) {
+	              entry = results[j];
+	              entries.push(entry);
+	            }
+	            if (results.length > MAX_COUNT) {
+	              return _this.goto("getFileAndFoldersFromEntries", false);
+	            } else {
+	              return _this.goto("readFolderEntries");
+	            }
+	          } else {
+	            if (gatherCounter === 1) {
+	              emptyFolders.push(folder);
+	            }
+	            return _this.goto("getFileAndFoldersFromEntries");
+	          }
+	        };
+	      })(this), (function(_this) {
+	        return function(err) {
+	          console.error(err);
+	          return _this["throw"](err);
+	        };
+	      })(this));
+	    }).status("getFileAndFoldersFromEntries", function(finished) {
+	      var entries, files, folder, folders, i, j, len;
+	      if (finished == null) {
+	        finished = true;
+	      }
+	      folder = this.get("folder");
+	      files = this.get("files");
+	      folders = this.get("folders");
+	      entries = this.get("entries");
+	      for (j = 0, len = entries.length; j < len; j++) {
+	        i = entries[j];
+	        if (!(i)) {
+	          continue;
+	        }
+	        if (i.isFile) {
+	          i.relativeDir = folder.fullPath;
+	          files.push(i);
+	        }
+	        if (i.isDirectory) {
+	          folders.push(i);
+	        }
+	      }
+	      if (!finished) {
+	        return this.goto("getOutput", false);
+	      } else {
+	        return this.goto("handleNextFolder");
+	      }
+	    }).status("getOutput", function(finished) {
+	      if (finished == null) {
+	        finished = true;
+	      }
+	      return Promise.all(this.get("files").map(function(f) {
 	        return new Promise(function(resolve, reject) {
 	          return f.file(function(file) {
 	            file.relativeDir = f.relativeDir;
 	            return resolve(file);
 	          }, function(err) {
-	            return reject(err);
+	            console.error(err);
+	            return resolve(null);
 	          });
 	        });
-	      }));
-	    }).then(function(fileObjects) {
-	      var emptyFolderPaths;
-	      emptyFolderPaths = emptyFolders.map(function(f) {
-	        return f.fullPath;
-	      });
-	      return Promise.resolve([fileObjects, emptyFolderPaths]);
-	    });
+	      })).then((function(_this) {
+	        return function(fileObjects) {
+	          var data, emptyFolderPaths, j, k, len, results1, v;
+	          fileObjects = fileObjects.filter(function(f) {
+	            return f;
+	          });
+	          emptyFolderPaths = _this.get("emptyFolders").map(function(f) {
+	            return f.fullPath;
+	          });
+	          if (!finished) {
+	            unfinishedData = {
+	              reader: _this.get("reader"),
+	              folder: _this.get("folder"),
+	              folders: _this.get("folders"),
+	              gatherCounter: _this.get("gatherCounter")
+	            };
+	            _this.complete([fileObjects, emptyFolderPaths, unfinishedData]);
+	          } else {
+	            _this.complete([fileObjects, emptyFolderPaths]);
+	          }
+	          data = _this.getAll();
+	          results1 = [];
+	          for (v = j = 0, len = data.length; j < len; v = ++j) {
+	            k = data[v];
+	            results1.push(data[k] = null);
+	          }
+	          return results1;
+	        };
+	      })(this))["catch"]((function(_this) {
+	        return function(e) {
+	          console.error(e);
+	          return _this["throw"](e);
+	        };
+	      })(this));
+	    })["catch"](function(err) {
+	      return console.error(err.stack);
+	    }).toPromise();
 	  };
 	
 	  return FileUploadManager;
@@ -1084,50 +1332,62 @@
 
 
 /***/ },
-/* 23 */
+/* 19 */
 /*!************************************!*\
   !*** ./client/src/Uploader.coffee ***!
   \************************************/
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
-	var EventEmitter, Uploader, size,
+	var EventEmitter, Uploader, utils,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
 	EventEmitter = Suzaku.EventEmitter;
 	
-	size = {
-	  kb: 1024,
-	  mb: 1024 * 1024
-	};
+	utils = __webpack_require__(/*! ./clientUtils */ 20);
 	
 	module.exports = Uploader = (function(superClass) {
 	  extend(Uploader, superClass);
 	
 	  function Uploader() {
 	    Uploader.__super__.constructor.apply(this, arguments);
-	    this.sliceSize = 3 * size.mb;
+	    this.sliceSize = 3 * utils.SIZE.MB;
 	    this.maxThreads = 2;
 	    this.file = null;
 	    this.availThreads = 0;
 	    this.sliceCount = 0;
 	    this.apiPath = null;
+	    this.completedSlices = 0;
 	    this.currentSlice = 0;
 	    this.currentDir = "/";
 	  }
 	
 	  Uploader.prototype.upload = function(currentDir, file) {
-	    var xhr;
 	    this.currentDir = currentDir;
 	    this.file = file;
+	    if (this.file.size > 0) {
+	      this.sliceCount = Math.ceil(this.file.size / this.sliceSize);
+	    } else {
+	      this.sliceCount = 1;
+	    }
+	    return this.preCheck((function(_this) {
+	      return function() {
+	        return _this.doUpload();
+	      };
+	    })(this));
+	  };
+	
+	  Uploader.prototype.preCheck = function(callback) {
+	    var args, xhr;
 	    xhr = new XMLHttpRequest();
-	    xhr.open("GET", "/check" + this.currentDir + "?filename=" + this.file.name + "&size=" + this.file.size);
+	    args = "filename=" + this.file.name + "&size=" + this.file.size + "&sliceCount=" + this.sliceCount;
+	    xhr.open("GET", "/check" + this.currentDir + "?" + args);
 	    xhr.send();
 	    return xhr.onreadystatechange = (function(_this) {
 	      return function(evt) {
 	        if (xhr.readyState === 4) {
 	          if (xhr.status === 200) {
-	            return _this.doUpload();
+	            return callback();
 	          } else {
 	            console.error("preCheck error for file:", _this.file);
 	            return _this.emit("error", xhr.responseText);
@@ -1138,11 +1398,6 @@
 	  };
 	
 	  Uploader.prototype.doUpload = function() {
-	    if (this.file.size > 0) {
-	      this.sliceCount = Math.ceil(this.file.size / this.sliceSize);
-	    } else {
-	      this.sliceCount = 1;
-	    }
 	    this.availThreads = this.maxThreads;
 	    console.log("sliceCount is " + this.sliceCount);
 	    this.currentSlice = 0;
@@ -1156,10 +1411,11 @@
 	    this.on("sliceComplete", (function(_this) {
 	      return function(slice) {
 	        _this.availThreads += 1;
-	        if (slice < (_this.sliceCount - 1)) {
-	          return _this.uploadNextSlice();
-	        } else if (_this.availThreads === _this.maxThreads) {
+	        _this.completedSlices += 1;
+	        if (_this.completedSlices === _this.sliceCount) {
 	          return _this.emit("complete");
+	        } else {
+	          return _this.uploadNextSlice();
 	        }
 	      };
 	    })(this));
@@ -1217,7 +1473,7 @@
 	      return function(evt) {
 	        if (xhr.readyState === 4) {
 	          if (xhr.status === 200) {
-	            return _this.emit("sliceComplete", slice);
+	            return _this.emit("sliceComplete", slice, _this.completedSlices, _this.sliceCount);
 	          } else {
 	            return _this.emit("error", xhr.responseText);
 	          }
@@ -1263,84 +1519,541 @@
 
 
 /***/ },
-/* 24 */,
-/* 25 */
-/*!*************************************************!*\
-  !*** ./client/src/components/FileNameItem.cjsx ***!
-  \*************************************************/
-/***/ function(module, exports, __webpack_require__) {
+/* 20 */
+/*!***************************************!*\
+  !*** ./client/src/clientUtils.coffee ***!
+  \***************************************/
+/***/ function(module, exports) {
 
-	var FileNameItem,
+	module.exports = {
+	  SIZE: {
+	    KB: 1024,
+	    MB: 1024 * 1024
+	  },
+	  getTimeBasedId: function() {
+	    var rand, time;
+	    time = Date.now().toString(36);
+	    rand = parseInt(Math.random() * 1000).toString(36);
+	    return time + rand;
+	  },
+	  normalize: function(path) {
+	    var regexp;
+	    regexp = /\//g;
+	    return path.replace(regexp, "/");
+	  }
+	};
+
+
+/***/ },
+/* 21 */
+/*!**************************************************!*\
+  !*** ./client/src/components/MessageHolder.cjsx ***!
+  \**************************************************/
+/***/ function(module, exports) {
+
+	var MessageHolder,
 	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
 	  hasProp = {}.hasOwnProperty;
 	
-	__webpack_require__(/*! ../styles/filesPanel.less */ 6);
+	module.exports = MessageHolder = (function(superClass) {
+	  extend(MessageHolder, superClass);
 	
-	module.exports = FileNameItem = (function(superClass) {
-	  extend(FileNameItem, superClass);
-	
-	  function FileNameItem() {
-	    FileNameItem.__super__.constructor.apply(this, arguments);
-	    this.state = {
-	      editing: false
-	    };
+	  function MessageHolder() {
+	    return MessageHolder.__super__.constructor.apply(this, arguments);
 	  }
 	
-	  FileNameItem.prototype.edit = function() {
-	    return this.setState({
-	      editing: true
-	    }, (function(_this) {
+	  MessageHolder.prototype.render = function() {
+	    var content;
+	    content = (function(_this) {
 	      return function() {
-	        _this.refs.input.focus();
-	        return _this.refs.input.select();
+	        var md;
+	        switch (_this.props.message) {
+	          case "loading":
+	            return "载入中";
+	          case "error":
+	            return "载入错误";
+	          case "empty":
+	            return "没有文件";
+	          case "uploadError":
+	            return React.createElement("span", {
+	              "className": "error"
+	            }, "上传错误 QAQ");
+	          case "uploadComplete":
+	            return React.createElement("span", {
+	              "className": "success"
+	            }, "上传成功 =w=");
+	          case "uploading":
+	            md = _this.props.messageData;
+	            if (!md) {
+	              return React.createElement("span", null, "上传中...");
+	            } else {
+	              return React.createElement("span", null, "正在上传文件", React.createElement("b", {
+	                "className": "filename"
+	              }, md.filename), React.createElement("b", {
+	                "className": "percentage"
+	              }, md.percentage, "%"), "完成文件数", React.createElement("b", null, md.completeFileCount, "\x2F", md.fileCount));
+	            }
+	        }
+	      };
+	    })(this)();
+	    return React.createElement("p", {
+	      "className": (!this.props.message ? "message-holder hidden" : "message-holder")
+	    }, content);
+	  };
+	
+	  return MessageHolder;
+	
+	})(React.Component);
+
+
+/***/ },
+/* 22 */
+/*!*****************************************!*\
+  !*** ./client/src/StatusMachine.coffee ***!
+  \*****************************************/
+/***/ function(module, exports, __webpack_require__) {
+
+	/* WEBPACK VAR INJECTION */(function(process) {var Status, StatusMachine,
+	  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+	  hasProp = {}.hasOwnProperty,
+	  slice = [].slice;
+	
+	Status = (function(superClass) {
+	  extend(Status, superClass);
+	
+	  function Status(name1, handler1) {
+	    this.name = name1;
+	    this.handler = handler1;
+	    Status.__super__.constructor.apply(this, arguments);
+	    this.data = null;
+	    this.isErrorStatus = false;
+	    this.name = this.name.toString();
+	    this.nextStatus = null;
+	  }
+	
+	  Status.prototype.run = function(data) {
+	    var e, error1;
+	    console.log("run status", this.name);
+	    this.emit("start");
+	    try {
+	      return this.handler.apply(this, [data, this]);
+	    } catch (error1) {
+	      e = error1;
+	      return this.panic(e);
+	    }
+	  };
+	
+	  Status.prototype.nextTo = function(promise) {
+	    return promise.then((function(_this) {
+	      return function(data) {
+	        return _this.next(data);
+	      };
+	    })(this))["catch"]((function(_this) {
+	      return function(e) {
+	        _this["throw"](e, {
+	          fromPromise: promise
+	        });
+	        return Promise.reject();
 	      };
 	    })(this));
 	  };
 	
-	  FileNameItem.prototype.handleKeyDown = function(evt) {
-	    switch (evt.keyCode) {
-	      case Suzaku.Key.enter:
-	        console.log(evt.target.value);
-	        this.props.onChange({
-	          newName: evt.target.value
-	        });
-	        return this.setState({
-	          editing: false
-	        });
+	  Status.prototype.queryData = function(promise, dataName, notEmpty) {
+	    if (dataName == null) {
+	      dataName = this.name + "Data";
 	    }
+	    if (notEmpty == null) {
+	      notEmpty = false;
+	    }
+	    return promise.then((function(_this) {
+	      return function(data) {
+	        if (notEmpty && (!data || data.length) === 0) {
+	          return _this["throw"](new Error("cannot find data " + dataName));
+	        } else {
+	          _this.set(dataName, data);
+	          return _this.next(data);
+	        }
+	      };
+	    })(this))["catch"]((function(_this) {
+	      return function(e) {
+	        _this["throw"](e, {
+	          fromPromise: promise,
+	          fromQueryData: true
+	        });
+	        return Promise.reject();
+	      };
+	    })(this));
 	  };
 	
-	  FileNameItem.prototype.handleClick = function(evt) {
-	    return evt.stopPropagation();
+	  Status.prototype.next = function(data) {
+	    return this.emit("next", data);
 	  };
 	
-	  FileNameItem.prototype.handleBlur = function(evt) {
-	    return this.setState({
-	      editing: false
-	    });
+	  Status.prototype.goto = function(name, data) {
+	    return this.emit("goto", name, data);
 	  };
 	
-	  FileNameItem.prototype.render = function() {
-	    if (this.state.editing) {
-	      return React.createElement("input", {
-	        "ref": "input",
-	        "className": "file-name-input",
-	        "type": "text",
-	        "onClick": this.handleClick.bind(this),
-	        "onKeyDown": this.handleKeyDown.bind(this),
-	        "onBlur": this.handleBlur.bind(this),
-	        "defaultValue": this.props.name
-	      });
+	  Status.prototype["throw"] = function(error, data) {
+	    return this.emit("throw", error, data);
+	  };
+	
+	  Status.prototype.panic = function(error, data) {
+	    return this.emit("panic", error, data);
+	  };
+	
+	  Status.prototype.complete = function(data) {
+	    return this.emit("complete", data);
+	  };
+	
+	  Status.prototype.set = function(key, value) {
+	    var k, results, v;
+	    console.log("set", key, value);
+	    if (key === void 0 && value === void 0) {
+	      console.error("[Status] wrong arguments in Status.set key:'" + key + "',value:'" + value + "'");
+	    }
+	    if (typeof key === "object" && value === void 0) {
+	      results = [];
+	      for (k in key) {
+	        v = key[k];
+	        results.push(this.data[k] = v);
+	      }
+	      return results;
 	    } else {
-	      return React.createElement("p", {
-	        "className": "name"
-	      }, this.props.name);
+	      return this.data[key] = value;
 	    }
 	  };
 	
-	  return FileNameItem;
+	  Status.prototype.save = function(key, value) {
+	    return this.set(key, value);
+	  };
 	
-	})(React.Component);
+	  Status.prototype.get = function(key) {
+	    if (this.data[key] === void 0) {
+	      console.error("[Status] try to get an not defined key:'" + key + "' in " + this.name);
+	    }
+	    return this.data[key];
+	  };
+	
+	  Status.prototype.getAll = function() {
+	    return this.data;
+	  };
+	
+	  Status.prototype.load = function(key) {
+	    return this.get(key);
+	  };
+	
+	  return Status;
+	
+	})(Suzaku.EventEmitter);
+	
+	module.exports = StatusMachine = (function(superClass) {
+	  extend(StatusMachine, superClass);
+	
+	  StatusMachine.Status = Status;
+	
+	  function StatusMachine(autoStart) {
+	    if (autoStart == null) {
+	      autoStart = true;
+	    }
+	    StatusMachine.__super__.constructor.apply(this, arguments);
+	    this.isActive = true;
+	    this.dataStorage = {};
+	    this.statusCount = 0;
+	    this.statusDict = {};
+	    this.statusList = [];
+	    this.lastStatus = null;
+	    this.lastNormalStatus = null;
+	    this.lastErrorStatus = null;
+	    this.errorHandlers = {};
+	    if (autoStart) {
+	      process.nextTick((function(_this) {
+	        return function() {
+	          return _this.start();
+	        };
+	      })(this));
+	    }
+	  }
+	
+	  StatusMachine.prototype.start = function(data) {
+	    if (!this.statusList[0]) {
+	      return console.error("[StatusMachine] no vailid status");
+	    }
+	    return this.statusList[0].run(data);
+	  };
+	
+	  StatusMachine.prototype.status = function() {
+	    var args, handler, name, s;
+	    args = 1 <= arguments.length ? slice.call(arguments, 0) : [];
+	    name = null;
+	    if (typeof args[0] === "function") {
+	      handler = args[0];
+	    } else {
+	      name = args[0], handler = args[1];
+	    }
+	    if (!name) {
+	      name = this.statusList.length + 1;
+	    }
+	    s = new Status(name, handler);
+	    s.data = this.dataStorage;
+	    this.statusDict[s.name] = s;
+	    if (this.statusList[this.statusList.length - 1]) {
+	      this.statusList[this.statusList.length - 1].nextStatus = s;
+	    }
+	    this.statusList.push(s);
+	    this.statusCount = this.statusList.length;
+	    this._bindStatusEvents(s);
+	    return this;
+	  };
+	
+	  StatusMachine.prototype["catch"] = function() {
+	    var args, handler, s, statusName;
+	    args = 1 <= arguments.length ? slice.call(arguments, 0) : [];
+	    if (typeof args[0] === "function") {
+	      handler = args[0];
+	      statusName = "_all";
+	    } else {
+	      statusName = args[0], handler = args[1];
+	      if (!this.statusDict[statusName]) {
+	        console.error("[StatusMachine] can't catch error for not exists status " + statusName);
+	        return false;
+	      }
+	    }
+	    if (this.errorHandlers[statusName]) {
+	      console.error("[StatusMachine] already has a error handler for status " + statusName);
+	      return false;
+	    }
+	    s = new Status("errorHandler:" + statusName, handler);
+	    s.isErrorStatus = true;
+	    s.data = this.dataStorage;
+	    this.errorHandlers[statusName] = s;
+	    this._bindStatusEvents(s);
+	    if (statusName === "_all") {
+	      s.next = null;
+	    } else {
+	      s.next = (function(_this) {
+	        return function(data) {
+	          if (_this.errorHandlers["_all"]) {
+	            return _this.errorHandlers["_all"].run(data, _this.lastNormalStatus.name);
+	          } else {
+	            return console.error("[StatusMachine] no next error handler for " + s.name);
+	          }
+	        };
+	      })(this);
+	    }
+	    s.nextTo = null;
+	    return this;
+	  };
+	
+	  StatusMachine.prototype.complete = function(data) {
+	    if (!this.isActive) {
+	      return;
+	    }
+	    this.isActive = false;
+	    this.emit("complete", data);
+	    return this;
+	  };
+	
+	  StatusMachine.prototype.toPromise = function() {
+	    return new Promise((function(_this) {
+	      return function(resolve, reject) {
+	        _this.on("complete", function(data) {
+	          return resolve(data);
+	        });
+	        return _this.on("panic", function(e) {
+	          return reject(e);
+	        });
+	      };
+	    })(this));
+	  };
+	
+	  StatusMachine.prototype.panic = function(e) {
+	    this.emit("error", e);
+	    this.emit("panic", e);
+	    return this;
+	  };
+	
+	  StatusMachine.prototype._bindStatusEvents = function(status) {
+	    status.on("start", (function(_this) {
+	      return function() {
+	        _this.lastStatus = status;
+	        if (status.isErrorStatus) {
+	          return _this.lastErrorStatus = status;
+	        } else {
+	          return _this.lastNormalStatus = status;
+	        }
+	      };
+	    })(this));
+	    status.on("next", (function(_this) {
+	      return function(data) {
+	        if (!_this.isActive) {
+	          return console.error("[StatusMachine] try to call next for " + status.name + " after complete");
+	        }
+	        if (status.nextStatus) {
+	          return status.nextStatus.run(data);
+	        } else {
+	          return _this.complete(data);
+	        }
+	      };
+	    })(this));
+	    status.on("goto", (function(_this) {
+	      return function(name, data) {
+	        var e, s;
+	        if (!_this.isActive) {
+	          return console.error("[StatusMachine] try to goto " + name + " for " + status.name + " after complete");
+	        }
+	        s = _this.statusDict[name];
+	        if (!s) {
+	          console.error("[StatusMachine] no status named " + name);
+	          e = new Error("invailid status name " + name + " to go from " + status.name, 500);
+	          e.status = status;
+	          return _this.panic(e);
+	        } else {
+	          return s.run(data);
+	        }
+	      };
+	    })(this));
+	    status.on("throw", (function(_this) {
+	      return function(error, data) {
+	        var e, handlerStatus;
+	        if (!_this.isActive) {
+	          return console.error("[StatusMachine] try to true " + error + " for " + status.name + " after complete");
+	        }
+	        handlerStatus = _this.errorHandlers[status.name] || _this.errorHandlers["_all"];
+	        if (!handlerStatus) {
+	          e = new Error("unhandled error from status " + status.name, 500);
+	          e.status = status;
+	          return _this.panic(e);
+	        } else {
+	          return handlerStatus.run(error, status.name, data || {});
+	        }
+	      };
+	    })(this));
+	    status.on("panic", (function(_this) {
+	      return function(e) {
+	        return _this.panic(e);
+	      };
+	    })(this));
+	    return status.on("complete", (function(_this) {
+	      return function(data) {
+	        return _this.complete(data);
+	      };
+	    })(this));
+	  };
+	
+	  StatusMachine.prototype.onComplete = function(handler) {
+	    this.on("complete", handler);
+	    return this;
+	  };
+	
+	  StatusMachine.prototype.onPanic = function(handler) {
+	    this.on("panic", handler);
+	    return this;
+	  };
+	
+	  return StatusMachine;
+	
+	})(Suzaku.EventEmitter);
+	
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(/*! (webpack)/~/node-libs-browser/~/process/browser.js */ 23)))
+
+/***/ },
+/* 23 */
+/*!**********************************************************!*\
+  !*** (webpack)/~/node-libs-browser/~/process/browser.js ***!
+  \**********************************************************/
+/***/ function(module, exports) {
+
+	// shim for using process in browser
+	
+	var process = module.exports = {};
+	var queue = [];
+	var draining = false;
+	var currentQueue;
+	var queueIndex = -1;
+	
+	function cleanUpNextTick() {
+	    draining = false;
+	    if (currentQueue.length) {
+	        queue = currentQueue.concat(queue);
+	    } else {
+	        queueIndex = -1;
+	    }
+	    if (queue.length) {
+	        drainQueue();
+	    }
+	}
+	
+	function drainQueue() {
+	    if (draining) {
+	        return;
+	    }
+	    var timeout = setTimeout(cleanUpNextTick);
+	    draining = true;
+	
+	    var len = queue.length;
+	    while(len) {
+	        currentQueue = queue;
+	        queue = [];
+	        while (++queueIndex < len) {
+	            if (currentQueue) {
+	                currentQueue[queueIndex].run();
+	            }
+	        }
+	        queueIndex = -1;
+	        len = queue.length;
+	    }
+	    currentQueue = null;
+	    draining = false;
+	    clearTimeout(timeout);
+	}
+	
+	process.nextTick = function (fun) {
+	    var args = new Array(arguments.length - 1);
+	    if (arguments.length > 1) {
+	        for (var i = 1; i < arguments.length; i++) {
+	            args[i - 1] = arguments[i];
+	        }
+	    }
+	    queue.push(new Item(fun, args));
+	    if (queue.length === 1 && !draining) {
+	        setTimeout(drainQueue, 0);
+	    }
+	};
+	
+	// v8 likes predictible objects
+	function Item(fun, array) {
+	    this.fun = fun;
+	    this.array = array;
+	}
+	Item.prototype.run = function () {
+	    this.fun.apply(null, this.array);
+	};
+	process.title = 'browser';
+	process.browser = true;
+	process.env = {};
+	process.argv = [];
+	process.version = ''; // empty string to avoid regexp issues
+	process.versions = {};
+	
+	function noop() {}
+	
+	process.on = noop;
+	process.addListener = noop;
+	process.once = noop;
+	process.off = noop;
+	process.removeListener = noop;
+	process.removeAllListeners = noop;
+	process.emit = noop;
+	
+	process.binding = function (name) {
+	    throw new Error('process.binding is not supported');
+	};
+	
+	process.cwd = function () { return '/' };
+	process.chdir = function (dir) {
+	    throw new Error('process.chdir is not supported');
+	};
+	process.umask = function() { return 0; };
 
 
 /***/ }

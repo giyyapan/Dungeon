@@ -3,16 +3,20 @@ path = require 'path'
 {EventEmitter} = require 'events'
 
 class UploadingFile extends EventEmitter
-  constructor:(@relativePath,@size,@checksum,@fileDescriptor)->
+  constructor:(@relativePath,@size,@sliceCount,@checksum,@fileDescriptor)->
     @receivedDataSize = 0
     @lastReportedSize = 0
     @startTime = Date.now()
+    @completedSlices = 0
     @checkCloseTimeout = null
     @lastReportedTime = @startTime
     @lastActiveAt = @startTime
 
   shouldClose:->
     Date.now() - @lastActiveAt > 60 * 1000
+
+  sliceComplete:->
+    @completedSlices += 1
 
   updateReceivedSize:(delta)->
     @receivedDataSize += delta
@@ -44,7 +48,9 @@ module.exports =
 
     preCheck:(req, res)->
       #get /check
-      {filename,size,checksum} = req.query
+      {filename,size,checksum,sliceCount} = req.query
+      if not filename or not size or not sliceCount
+        return res.status(400).end()
       dir = req.params[0] or "/"
       realDir = path.normalize "#{@dataPath}/#{dir}"
       relativePath = path.normalize "/#{dir}/#{filename}"
@@ -57,7 +63,7 @@ module.exports =
           if e
             console.error e
             return res.status(500).end()
-          @_addUploadingFile relativePath,size,checksum,fileDescriptor
+          @_addUploadingFile relativePath,size,sliceCount,checksum,fileDescriptor
           console.log "preCheck success, waiting for file upload ..."
           res.end()
 
@@ -73,7 +79,7 @@ module.exports =
       uf = @uploadingFiles[relativePath]
       cachedChunks = []
       offset = 0
-      reportFinish = false
+      requestFinished = false
       req.on "data",(chunk)=>
         uf.activate()
         fs.write uf.fileDescriptor,chunk,0,chunk.length,start + offset,(e)=>
@@ -83,21 +89,22 @@ module.exports =
             @_removeUploadingFile(relativePath)
             return
           uf.updateReceivedSize chunk.length
-          if stop is (uf.size - 1) and reportFinish
+          if requestFinished and uf.completedSlices is uf.sliceCount
             totalTime = ((Date.now() - uf.startTime)/1000).toFixed(1)
             console.log "File upload Completed! - totalSize #{uf.size} upload used #{totalTime}s"
             @_removeUploadingFile relativePath
-            reportFinish = false
+            requestFinished = false
         offset += chunk.length
       req.on "end",->
         #console.log "upload complete #{start}~#{stop}"
-        reportFinish = true
+        requestFinished = true
+        uf.sliceComplete()
         res.end()
 
-    _addUploadingFile:(relativePath, size, checksum, fileDescriptor)->
+    _addUploadingFile:(relativePath, size, sliceCount, checksum, fileDescriptor)->
       if @uploadingFiles[relativePath]
         @uploadingFiles[relativePath].close()
-      uf = new UploadingFile relativePath,size,checksum,fileDescriptor
+      uf = new UploadingFile relativePath,size,sliceCount,checksum,fileDescriptor
       @uploadingFiles[relativePath] = uf
       @_startAutoCloseTimeout uf
 

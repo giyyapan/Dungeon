@@ -87,6 +87,18 @@ body {
   transform: translateX(-50%);
   border-radius: 1px;
 }
+.files-panel .files-holder .message-holder b {
+  font-weight: normal;
+  display: inline-block;
+  margin: 0 5px;
+  color: #888;
+}
+.files-panel .files-holder .message-holder .filename {
+  color: #0091b1;
+}
+.files-panel .files-holder .message-holder .success {
+  color: #49ad35;
+}
 .files-panel .files-holder .message-holder .error {
   color: #B12B00;
 }

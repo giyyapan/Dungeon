@@ -5,6 +5,8 @@ FileItem = require './FileItem'
 ImageItem = require './ImageItem'
 DetailPanel = require './DetailPanel'
 ContextMenu = require './ContextMenu'
+MessageHolder = require './MessageHolder'
+utils = require '../clientUtils'
 
 module.exports =
   class FilesPanel extends React.Component
@@ -26,7 +28,9 @@ module.exports =
       @props.client.on "uploading",=>
         @setState message:"uploading"
 
-    listDir:->
+    listDir:(showMessage = true)->
+      if @_isLoading then return
+      @_isLoading = true
       $.get "/listDir#{@state.currentDir}",(data)=>
         console.log "got list data",data
         data.items.sort (a,b)->
@@ -37,24 +41,41 @@ module.exports =
           message = 'empty'
         else
           message = null
-        @setState {items:data.items, message:message}
+        @_isLoading = false
+        if showMessage
+          @setState {items:data.items, message:message}
+          setTimeout =>
+            @setState message:null
+          ,3000
+        else
+          @setState {items:data.items}
       .fail (e)=>
+        @_isLoading = false
         console.log "error",e
-        @setState {error:true, message:'error'}
+        if showMessage
+          @setState {error:true, message:'error'}
 
-    changeDir:({newDir})->
+    enterDir:({newDir})->
       dirStack = @state.dirStack.map (d)-> d
       dirStack.push @state.currentDir
-      @setState {currentDir:newDir,dirStack:dirStack,message:'loading'},=>
-        @listDir()
+      @changeDir newDir,dirStack
+
+    changeDir:(dir,dirStack)->
+      state = {currentDir:dir}
+      showMessage = if @state.message then false else true
+      if showMessage
+        state.message = 'loading'
+      if dirStack
+        state.dirStack = dirStack
+      @setState state,=>
+        @listDir showMessage
 
     goBack:->
       # go back
       dirStack = @state.dirStack.map (d)-> d
       return if dirStack.length is 0
       dir = dirStack.pop()
-      @setState {currentDir:dir,dirStack:dirStack,message:"loading"},=>
-        @listDir()
+      @changeDir dir,dirStack
 
     refresh:->
       @setState {message:"loading"}
@@ -63,8 +84,13 @@ module.exports =
     componentDidMount:->
       @listDir()
 
-    showMessage:(msg)->
-      @setState message:msg
+    showMessage:(msg,data,timeout)->
+      msgId = utils.getTimeBasedId()
+      @setState message:msg,messageData:data,messageId:msgId
+      if timeout
+        setTimeout =>
+          @setState(message:null) if @state.messageId is msgId
+        ,timeout
 
     _showItemDetail:({itemType,itemData})->
       @refs.detailPanel.showDetail itemType,itemData
@@ -107,7 +133,7 @@ module.exports =
         data.itemType = @getItemType data.itemData
       switch event
         when 'enterDir'
-          @changeDir data
+          @enterDir data
         when 'showDetail'
           @_showItemDetail data
         when 'showContextMenu'
@@ -138,17 +164,7 @@ module.exports =
           <span className="current-path">{@state.currentDir}</span>
         </header>
         <div className="files-holder" onContextMenu={@handleContextMenu.bind(@)}>
-          {
-            if @state.message
-              <p className="message-holder">{
-                switch @state.message
-                  when "loading" then "载入中"
-                  when "error" then "载入错误"
-                  when "empty" then "没有文件"
-                  when "uploading" then "上传中..."
-                  when "uploadError" then <span className="error">上传错误！</span>
-              }</p>
-          }
+          <MessageHolder message={@state.message} messageData={@state.messageData}/>
           {
             ft = FilesPanel.FileTypes
             for item in @state.items
